@@ -11,7 +11,7 @@ repository = "https://github.com/xmh0511/rust-xfinal"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-macro-utilities={git="https://github.com/xmh0511/rust-xfinal-macro", version="0.1.0"}
+rust-xfinal-macro="0.1.0"
 
 [dependencies.uuid]
 version = "1.1.2"

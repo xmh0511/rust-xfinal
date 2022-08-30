@@ -11,7 +11,7 @@ pub use http_parser::{
     ConnectionData, MiddleWare, Request, Response, Router, RouterMap, RouterValue, ServerConfig,
 };
 
-pub use macro_utilities::end_point;
+pub use rust_xfinal_macro::end_point;
 
 pub use http_parser::connection::http_response_table::{
     CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE,
