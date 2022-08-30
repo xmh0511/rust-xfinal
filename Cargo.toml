@@ -1,0 +1,19 @@
+[package]
+name = "rust-xfinal"
+version = "0.8.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A safe and simplely used web framework"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+macro-utilities={path="./macro-utilities"}
+
+[dependencies.uuid]
+version = "1.1.2"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
