@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "rust-xfinal"
-version = "0.8.10"
+version = "0.8.11"
 dependencies = [
  "rust-xfinal-macro",
  "uuid",
