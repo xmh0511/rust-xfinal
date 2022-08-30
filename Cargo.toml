@@ -4,6 +4,9 @@ version = "0.8.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A safe and simplely used web framework"
+homepage = "https://github.com/xmh0511/rust-xfinal"
+readme = "README.md"
+repository = "https://github.com/xmh0511/rust-xfinal"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
