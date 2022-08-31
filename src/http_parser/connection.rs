@@ -105,9 +105,10 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Get the value of a parameter in the requested url
-    /// For example, `/path?id=1`
-    /// get_param("id"), the key is case senstive
+    /// > Get the value of a parameter in the requested url
+    /// # For example 
+	/// > `/path?id=1`
+    /// >> - `get_param("id")` returns 1, the key is case senstive
     pub fn get_param(&self, k: &str) -> Option<&str> {
         match self.url.split_once("?") {
             Some((_, v)) => {
@@ -128,9 +129,10 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Get the HashMap of the parameters in the requested url
-    /// For example, `/path?id=1&flag=true`
-    /// This method will give `{id:1, flag:true }`
+    /// > Get the HashMap of the parameters in the requested url
+    /// # For example
+	/// > `/path?id=1&flag=true`
+    /// >> - `get_params()` returns `{id:1, flag:true }`
     pub fn get_params(&self) -> Option<HashMap<&str, &str>> {
         match self.url.split_once("?") {
             Some((_, v)) => {
@@ -154,19 +156,20 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Get the complete http headers
-    /// {"Content-length":"1", "key":"value",...}
+    /// > Get the complete http headers
+    /// >> - `{"Content-length":"1", "key":"value",...}`
     pub fn get_headers(&self) -> HashMap<&str, &str> {
         self.header_pair.clone()
     }
-    /// Get the version of http request
+    /// > Get the version of http request
     pub fn get_version(&self) -> &str {
         self.version
     }
 
-    /// Query the value of www-form-urlencoded or the text part of the multipart-form
-    /// The key is not case senstive
-    /// For example, Assume the form has the value `id=1`, then get_query("id") returns Some("1")
+    /// > Query the value of www-form-urlencoded or the text part of the multipart-form
+    /// >> - The key is not case senstive
+    /// # For example
+	/// > Assume the form has the value `id=1`, then get_query("id") returns Some("1")
     ///
     pub fn get_query(&self, k: &str) -> Option<&str> {
         if let BodyContent::UrlForm(x) = &self.body {
@@ -212,14 +215,15 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// This method is used to acquire the file in the multipart-form data
-    /// For example,
-    ///
+    /// > This method is used to acquire the file in the multipart-form data
+    /// # For example,
+    /// ```
     /// <form>
     ///    <input type="file" name="file1" />
     /// </form>
-    /// get_file("file1") return the file's meta data
     ///
+    ///```
+	/// > - `get_file("file1")` return the file's meta data
     pub fn get_file(&self, k: &str) -> Option<&'_ MultipleFormFile> {
         if let BodyContent::Multi(x) = &self.body {
             let r = x.keys().find(|&ik| {
@@ -245,8 +249,8 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Return a HashMap that comprises all pairs in the www-form-urlencoded or the text part of the multipart-form
-    /// It is safety called even though the request is `GET`, which returns None
+    /// > Return a HashMap that comprises all pairs in the www-form-urlencoded or the text part of the multipart-form
+    /// >> - It is safety called even though the request is `GET`, which returns None
     pub fn get_queries(&self) -> Option<HashMap<&str, &str>> {
         if let BodyContent::UrlForm(x) = &self.body {
             Some(x.clone())
@@ -270,7 +274,7 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Returns an array comprises of all files in the multipart-form data
+    /// > Returns an array comprises of all files in the multipart-form data
     pub fn get_files(&self) -> Option<Vec<&MultipleFormFile>> {
         if let BodyContent::Multi(x) = &self.body {
             let mut vec = Vec::new();
@@ -292,8 +296,8 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Returns the body of a request
-    /// For example, it is used for getting the posted JSON or other plain text body
+    /// > Returns the body of a request
+    /// >> -  it is used for getting the posted JSON or other plain text body
     pub fn plain_body(&self) -> Option<&str> {
         if let BodyContent::PureText(x) = self.body {
             Some(x)
@@ -302,7 +306,7 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Determin whether the request has a body
+    /// > Determin whether the request has a body
     pub fn has_body(&self) -> bool {
         if let BodyContent::None = self.body {
             false
@@ -311,8 +315,8 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Return the raw instance of TcpStream
-    /// This method should be carefully used
+    /// > Return the raw instance of TcpStream
+    /// >> - This method should be carefully used, 
     /// It is better to only get some meta information of a connection, such as a peer IP
     pub fn get_conn(&self) -> Rc<RefCell<&'a mut TcpStream>> {
         Rc::clone(&self.conn_)
@@ -343,7 +347,7 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         Some((r?).clone())
     }
 
-    /// Set the transfer type of a response with chunked
+    /// > Set the transfer type of a response with chunked
     pub fn chunked(&mut self) -> &mut Self {
         if self.has_failure {
             return self;
@@ -360,7 +364,7 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         self
     }
 
-    /// Specify the status of a http response
+    /// > Specify the status of a http response
     pub fn status(&mut self, code: u16) -> &mut Self {
         if self.has_failure {
             return self;
@@ -369,8 +373,8 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         self
     }
 
-    /// This is only used to specify the name when the client downloads a file
-    /// Only works if it follows the write_file()
+    /// > This is only used to specify the name when the client downloads a file
+    /// >> - Only works if it follows the write_file()
     pub fn specify_file_name(&mut self, name: &str) -> &mut Self {
         if self.has_failure {
             return self;
@@ -390,7 +394,7 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         self
     }
 
-    /// Start a range function for such as write_file, write_string, or render_view_xxxx
+    /// > Start a range function for such as `write_file`, `write_string`, or `render_view_xxxx`
     pub fn enable_range(&mut self) -> &mut Self {
         if self.has_failure {
             return self;
@@ -528,12 +532,17 @@ impl<'a> Response<'a> {
         }
     }
 
-    /// Remove a pair you have writed to a reponse header
-    /// The key is not case senstive
-    /// For example, add_header(String::from("a"),String::from("b"))
-    /// Header: {a:b}
+    /// > Remove a pair you have writed to a reponse header
+    /// >> - The key is not case senstive
+    /// # For example 
+	/// ```
+	/// add_header(String::from("a"),String::from("b"))
+	/// ```
+    /// > Header: {a:b}
+	/// ```
     /// remove_header(String::from("a"))
-    /// Header: {}
+	/// ```
+    /// > Header: {}
     pub fn remove_header(&mut self, key: String) {
         let r = self.header_pair.keys().find(|&ik| {
             if key.to_lowercase() == ik.to_lowercase() {
@@ -552,9 +561,11 @@ impl<'a> Response<'a> {
         }
     }
 
-    /// Add a pair to the header of the response
+    /// > Add a pair to the header of the response
+	/// ```
     /// add_header(String::from("a"),String::from("b"))
-    /// Header:{a:b}
+	/// ```
+    /// >  Header:{a:b}
     pub fn add_header(&mut self, key: String, value: String) {
         self.header_pair.insert(key, value);
     }
@@ -684,10 +695,12 @@ impl<'a> Response<'a> {
         }
     }
 
-    /// Check whether a pair exists in the header of a reponse
-    /// For example, assume the header is {a:b}
-    /// header_exist("a") returns true
-    /// The key is not case senstive
+    /// > Check whether a pair exists in the header of a reponse
+    /// # For example
+	/// > assume the header is {a:b}
+	/// 
+    /// `header_exist("a")` returns true
+    /// > The key is not case senstive
     pub fn header_exist(&self, s: &str) -> bool {
         let r = self.header_pair.keys().find(|&k| {
             if k.to_lowercase() == s.to_lowercase() {
@@ -701,12 +714,12 @@ impl<'a> Response<'a> {
             None => false,
         }
     }
-    /// write a utf-8 String to client
+    /// > Write a utf-8 String to client
     pub fn write_string(&mut self, v: &str) -> ResponseConfig<'_, 'a> {
         self.write_binary(v.into())
     }
 
-    /// write binary data to client
+    /// > Write binary data to client
     pub fn write_binary(&mut self, v: Vec<u8>) -> ResponseConfig<'_, 'a> {
         self.add_header(String::from("Content-length"), v.len().to_string());
         self.body = BodyType::Memory(v);
@@ -716,14 +729,14 @@ impl<'a> Response<'a> {
         }
     }
 
-    /// Only respond HTTP status to the client
+    /// > Only respond HTTP status to the client
     pub fn write_state(&mut self, code: u16) {
         self.http_state = code;
         self.add_header(String::from("Content-length"), 0.to_string());
         self.body = BodyType::None;
     }
 
-    /// Write file data to the client
+    /// > Write file data to the client
     pub fn write_file(&mut self, path: String) -> ResponseConfig<'_, 'a> {
         match std::fs::OpenOptions::new().read(true).open(path.clone()) {
             Ok(file) => {
@@ -764,9 +777,9 @@ impl<'a> Response<'a> {
         }
     }
 
-    /// Render a view to the client
-    /// The argument is a factory that implements Fn() -> tera::Result<String>
-    /// The factory permits you customize the behavior of the tera engine
+    /// > Render a view to the client
+    /// >> - factory implements Fn() -> tera::Result<String>
+    /// >>> - The factory permits you customize the behavior of the tera engine
     pub fn render_view(
         &mut self,
         factory: impl Fn(&tera::Context) -> tera::Result<String>,
@@ -787,9 +800,9 @@ impl<'a> Response<'a> {
         }
     }
 
-    /// Only use the default configured tera to render a view to the client
-    /// path of view file
-    /// the context used in the view
+    /// > Only use the default configured tera to render a view to the client
+    /// >> - path: path of view file
+    /// >> - context: used in the view
     pub fn render_view_once(&mut self, path: &str, context: &Context) -> ResponseConfig<'_, 'a> {
         match OpenOptions::new().read(true).open(path) {
             Ok(mut file) => {
