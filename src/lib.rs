@@ -20,6 +20,10 @@ pub use http_parser::connection::http_response_table::{
 use http_parser::connection::http_response_table::get_httpmethod_from_code;
 
 
+pub use tera;
+
+pub use serde_json;
+
 pub trait SerializationMethods {
     fn serialize(&self) -> Vec<&'static str>;
 }
@@ -105,6 +109,9 @@ impl<'a> RouterRegister<'a> {
 }
 
 impl HttpServer {
+	/// create an instance of http server
+	/// use end_point![0.0.0.0:8080] to construct the first parameter
+	/// the second parameter specify the size of thread pool 
     pub fn create(end: EndPoint, count: u16) -> Self {
         Self {
             end_point: end,
@@ -127,35 +134,51 @@ impl HttpServer {
         let _ = std::fs::create_dir(self.config_.upload_directory.clone())?;
         Ok(true)
     }
-
+    /// This method specifies the value of time when waiting for the read from the client.
+	/// The unit is millsecond
     pub fn set_read_timeout(&mut self, millis: u32) {
         self.config_.read_timeout = millis;
     }
 
+	/// This method specifies the value of time when waiting for the read of the client
+	/// The unit is millsecond
     pub fn set_write_timeout(&mut self, millis: u32) {
         self.config_.write_timeout = millis;
     }
 
+	/// When responding to the client by using Chunked Transfer, specifiy each chunk size
+	/// The unit is byte
     pub fn set_chunksize(&mut self, size: u32) {
         self.config_.chunk_size = size;
     }
 
+	/// The switch to output the error in the connection the server has caught
     pub fn open_server_log(&mut self, open: bool) {
         self.config_.open_log = open;
     }
 
+	/// Specify the maximum size of body in a connection the server can handle
+	/// The unit is byte
     pub fn set_max_body_size(&mut self, size: usize) {
         self.config_.max_header_size = size;
     }
 
+	/// Specify the maximum size of http header in a connection the server can handle
+	/// The unit is byte
     pub fn set_max_header_size(&mut self, size: usize) {
         self.config_.max_body_size = size;
     }
 
+	/// Specify the increased size of buffers used for taking the content of the stream in a connection
+	/// The unit is byte
 	pub fn set_read_buff_increase_size(&mut self, size: usize){
         self.config_.read_buff_increase_size = size;
 	}
 
+
+	/// To start a http server
+	/// This is a block method, which implies all set to the instance of HttpServer
+	/// should precede the call of this method
     pub fn run(&mut self) {
         let [a, b, c, d] = self.end_point.ip_address;
         let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(a, b, c, d)), self.end_point.port);
@@ -207,6 +230,24 @@ impl HttpServer {
         }
     }
 
+	/// Register a router 
+	/// Http Method
+	/// Http Url to which the router respond
+	/// # Example
+	/// ````
+	/// HttpServer::route(HttpServer::GET, "/").reg(...)
+	/// the call of `reg` registers the action
+	/// the argument shall satisfy the trait Router
+	/// Router is automatically implemented for type fn and FnMut that takes two parameters `&Request` and `& mut Response`
+	/// 
+	/// HttpServer::route(HttpServer::GET, "/").reg_with_middlewares(...)
+	/// register a router with a set of middlwares 
+	/// The first argument is a set of middlwares
+	/// A middleware satisfies trait `MiddleWare`
+	/// 
+	/// In the above cases, the path can a wildcard url, such as `/path/*`
+	/// A valid wildcard path cannot be `/*`
+	/// ````
     pub fn route<'a, T: SerializationMethods>(
         &'a mut self,
         methods: T,
@@ -223,6 +264,9 @@ impl HttpServer {
         }
     }
 
+	/// Specify the action when a request does not have a corresponding registered router
+	/// The framework has a preset action, you can overwrite it by using this method
+	/// The argument shall satisfy constraint: Router + Send + Sync + 'static
     pub fn set_not_found<F>(&mut self, f: F)
     where
         F: Router + Send + Sync + 'static,
@@ -241,6 +285,7 @@ impl HttpServer {
     }
 }
 
+/// This macro is used to conveniently construct a set of middlwares
 #[macro_export]
 macro_rules! inject_middlewares {
 	($($m:expr),*) => {
