@@ -371,7 +371,7 @@ fn write_once(stream: &mut TcpStream, response: &mut Response) -> io::Result<()>
             if end > total_len {
                 end = total_len;
             }
-            let slice = &mut lazy_buffs[start..end];
+            let slice = lazy_buffs.get_slice_from_range(start..end)?;//&mut lazy_buffs[start..end];
             stream.write(slice)?;
             start = end;
         }
@@ -398,7 +398,7 @@ fn write_chunk(stream: &mut TcpStream, response: &mut Response) -> io::Result<()
         if end > lazy_buffs.len() {
             end = lazy_buffs.len();
         }
-        let slice = &mut lazy_buffs[start..end];
+        let slice = lazy_buffs.get_slice_from_range(start..end)?;//&mut lazy_buffs[start..end];
         let size = end - start;
         let size = format!("{:X}", size);
         stream.write(size.as_bytes())?;

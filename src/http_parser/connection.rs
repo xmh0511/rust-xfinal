@@ -4,7 +4,7 @@ use std::fs::OpenOptions;
 use std::io::Read;
 use std::net::TcpStream;
 
-use std::ops::{Deref, DerefMut, Index, IndexMut, Range};
+use std::ops::{Range};
 
 use std::rc::Rc;
 
@@ -214,12 +214,12 @@ impl<'a> Request<'a> {
 
     /// This method is used to acquire the file in the multipart-form data
     /// For example,
-    /// 
+    ///
     /// <form>
     ///    <input type="file" name="file1" />
     /// </form>
     /// get_file("file1") return the file's meta data
-    /// 
+    ///
     pub fn get_file(&self, k: &str) -> Option<&'_ MultipleFormFile> {
         if let BodyContent::Multi(x) = &self.body {
             let r = x.keys().find(|&ik| {
@@ -684,26 +684,29 @@ impl<'a> Response<'a> {
         }
     }
 
-	/// Check whether a pair exists in the header of a reponse
-	/// For example, assume the header is {a:b}
-	/// header_exist("a") returns true
-	/// The key is not case senstive
+    /// Check whether a pair exists in the header of a reponse
+    /// For example, assume the header is {a:b}
+    /// header_exist("a") returns true
+    /// The key is not case senstive
     pub fn header_exist(&self, s: &str) -> bool {
-        let r = self
-            .header_pair
-            .keys()
-            .find(|&k| if k.to_lowercase() == s.to_lowercase() { true } else { false });
+        let r = self.header_pair.keys().find(|&k| {
+            if k.to_lowercase() == s.to_lowercase() {
+                true
+            } else {
+                false
+            }
+        });
         match r {
             Some(_) => true,
             None => false,
         }
     }
-	/// write a utf-8 String to client
+    /// write a utf-8 String to client
     pub fn write_string(&mut self, v: &str) -> ResponseConfig<'_, 'a> {
         self.write_binary(v.into())
     }
 
-	/// write binary data to client
+    /// write binary data to client
     pub fn write_binary(&mut self, v: Vec<u8>) -> ResponseConfig<'_, 'a> {
         self.add_header(String::from("Content-length"), v.len().to_string());
         self.body = BodyType::Memory(v);
@@ -713,14 +716,14 @@ impl<'a> Response<'a> {
         }
     }
 
-	/// Only respond HTTP status to the client 
+    /// Only respond HTTP status to the client
     pub fn write_state(&mut self, code: u16) {
         self.http_state = code;
         self.add_header(String::from("Content-length"), 0.to_string());
         self.body = BodyType::None;
     }
 
-	/// Write file data to the client
+    /// Write file data to the client
     pub fn write_file(&mut self, path: String) -> ResponseConfig<'_, 'a> {
         match std::fs::OpenOptions::new().read(true).open(path.clone()) {
             Ok(file) => {
@@ -761,9 +764,9 @@ impl<'a> Response<'a> {
         }
     }
 
-	/// Render a view to the client
-	/// The argument is a factory that implements Fn() -> tera::Result<String>
-	/// The factory permits you customize the behavior of the tera engine
+    /// Render a view to the client
+    /// The argument is a factory that implements Fn() -> tera::Result<String>
+    /// The factory permits you customize the behavior of the tera engine
     pub fn render_view(
         &mut self,
         factory: impl Fn() -> tera::Result<String>,
@@ -783,9 +786,9 @@ impl<'a> Response<'a> {
         }
     }
 
-	/// Only use the default configured tera to render a view to the client
-	/// path of view file
-	/// the context used in the view
+    /// Only use the default configured tera to render a view to the client
+    /// path of view file
+    /// the context used in the view
     pub fn render_view_once(&mut self, path: &str, context: &Context) -> ResponseConfig<'_, 'a> {
         match OpenOptions::new().read(true).open(path) {
             Ok(mut file) => {
@@ -873,52 +876,95 @@ impl LayzyBuffers {
     pub fn len(&self) -> usize {
         self.len as usize
     }
-}
 
-impl Index<Range<usize>> for LayzyBuffers {
-    type Output = [u8];
-
-    fn index(&self, _index: Range<usize>) -> &Self::Output {
-		unreachable!()
-    }
-}
-
-impl IndexMut<Range<usize>> for LayzyBuffers {
-    fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
+    pub fn get_slice_from_range(&mut self, index: Range<usize>)-> Result<&[u8],io::Error> {
         match &mut self.buffs {
-            LayzyBuffersType::Memory(buffs) => &mut buffs[index],
+            LayzyBuffersType::Memory(buffs) => Ok(&mut buffs[index]),
             LayzyBuffersType::File(file_v) => {
                 let file = &mut file_v.file;
                 let need_size = index.end - index.start;
                 let buffs = &mut file_v.buffs;
                 buffs.resize(need_size, b'\0');
-                file.read(buffs).unwrap();
-                buffs
+                match file.read(buffs){
+                    Ok(_) => {
+						return Ok(buffs)
+					},
+                    Err(e) => {
+						return Err(e);
+					},
+                }
+                
             }
             LayzyBuffersType::None => unreachable!(),
         }
     }
+
+	// pub fn get_total_slice(& mut self)-> Result<&[u8],io::Error> {
+    //     match &mut self.buffs {
+    //         LayzyBuffersType::Memory(buffs) => {
+	// 			return Ok(buffs);
+	// 		},
+    //         LayzyBuffersType::File(file_v) => {
+    //             let file = &mut file_v.file;
+    //             let buffs = &mut file_v.buffs;
+    //             match file.read_to_end(buffs){
+    //                 Ok(_) => {
+	// 					return Ok(buffs);
+	// 				},
+    //                 Err(e) => {
+	// 					return Err(e);
+	// 				},
+    //             }
+    //         }
+    //         LayzyBuffersType::None => unreachable!(),
+    //     }
+	// }
 }
 
-impl Deref for LayzyBuffers {
-    type Target = Vec<u8>;
+// impl Index<Range<usize>> for LayzyBuffers {
+//     type Output = [u8];
 
-    fn deref(&self) -> &Self::Target {
-        unreachable!()
-    }
-}
+//     fn index(&self, _index: Range<usize>) -> &Self::Output {
+//         unreachable!()
+//     }
+// }
 
-impl DerefMut for LayzyBuffers {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match &mut self.buffs {
-            LayzyBuffersType::Memory(buffs) => buffs,
-            LayzyBuffersType::File(file_v) => {
-                let file = &mut file_v.file;
-                let buffs = &mut file_v.buffs;
-                file.read_to_end(buffs).unwrap();
-                buffs
-            }
-            LayzyBuffersType::None => unreachable!(),
-        }
-    }
-}
+// impl IndexMut<Range<usize>> for LayzyBuffers {
+//     fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
+//         match &mut self.buffs {
+//             LayzyBuffersType::Memory(buffs) => &mut buffs[index],
+//             LayzyBuffersType::File(file_v) => {
+//                 let file = &mut file_v.file;
+//                 let need_size = index.end - index.start;
+//                 let buffs = &mut file_v.buffs;
+//                 buffs.resize(need_size, b'\0');
+//                 file.read(buffs).unwrap();
+//                 buffs
+//             }
+//             LayzyBuffersType::None => unreachable!(),
+//         }
+//     }
+// }
+
+// impl Deref for LayzyBuffers {
+//     type Target = Vec<u8>;
+
+//     fn deref(&self) -> &Self::Target {
+//         unreachable!()
+//     }
+// }
+
+// impl DerefMut for LayzyBuffers {
+//     fn deref_mut(&mut self) -> &mut Self::Target {
+//         match &mut self.buffs {
+//             LayzyBuffersType::Memory(buffs) => buffs,
+//             LayzyBuffersType::File(file_v) => {
+//                 let file = &mut file_v.file;
+//                 let buffs = &mut file_v.buffs;
+//                 file.read_to_end(buffs).unwrap();
+//                 buffs
+//             }
+//             LayzyBuffersType::None => unreachable!(),
+//         }
+//     }
+// }
