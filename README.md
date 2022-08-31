@@ -18,10 +18,10 @@ This is the beginning of the aim to write a safe web server framework by Rust. F
 3. Query text-plain body, url-form data, and multipart-form data(include uploaded files).
 4. Chunked transfer
 5. Accept Range requests, which implies that rust-xfinal has supported to download file with the resume breakpoint.
+6. View render based on tera
 
 ### Features that haven't been supported yet
 1. Cookie/Session
-2. View-engine
 
 ### Usage
 > 1. HTTP "hello, world"
