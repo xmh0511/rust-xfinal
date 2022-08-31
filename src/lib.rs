@@ -234,7 +234,7 @@ impl HttpServer {
 	/// Http Method
 	/// Http Url to which the router respond
 	/// # Example
-	/// ````
+	/// 
 	/// HttpServer::route(HttpServer::GET, "/").reg(...)
 	/// the call of `reg` registers the action
 	/// the argument shall satisfy the trait Router
@@ -247,7 +247,7 @@ impl HttpServer {
 	/// 
 	/// In the above cases, the path can a wildcard url, such as `/path/*`
 	/// A valid wildcard path cannot be `/*`
-	/// ````
+	/// 
     pub fn route<'a, T: SerializationMethods>(
         &'a mut self,
         methods: T,
