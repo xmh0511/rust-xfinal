@@ -777,6 +777,9 @@ impl<'a> Response<'a> {
             None => false,
         }
     }
+
+	/// > Get response header
+	/// >> - Return a Vector since a single key can correspond to multiple values in the response header.
 	pub fn get_header(&self, k:&str) ->Option<&Vec<String>>{
 		self.header_pair.get_vec(k)
 	}
