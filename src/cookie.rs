@@ -29,7 +29,7 @@ fn cookie_str_to_map(s: &str) -> HashMap<&str, &str> {
     for e in s.split(";") {
         match e.split_once("=") {
             Some((k, v)) => {
-                map.insert(k, v);
+                map.insert(k.trim(), v.trim());
             }
             None => {
                 continue;
@@ -46,7 +46,7 @@ impl Cookie {
     pub fn new(name: String, req: &Request) -> Self {
         let key = &*req.get_secret_key();
         let path = req.url_to_path();
-        match req.get_header(&name) {
+        match req.get_header("Cookie") {
             Some(s) => match cookie_str_to_map(s).get(name.as_str()) {
                 Some(&token) => {
                     match token.verify_with_key(key) {
