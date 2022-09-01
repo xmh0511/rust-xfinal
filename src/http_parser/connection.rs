@@ -777,6 +777,9 @@ impl<'a> Response<'a> {
             None => false,
         }
     }
+	pub fn get_header(&self, k:&str) ->Option<&Vec<String>>{
+		self.header_pair.get_vec(k)
+	}
     /// > Write a utf-8 String to client
     pub fn write_string(&mut self, v: &str) -> ResponseConfig<'_, 'a> {
         self.write_binary(v.into())

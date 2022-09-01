@@ -137,5 +137,27 @@ fn main() {
 	server.run();
 }
 ````
+>7. Cookie
+````rust
+use rust_xfinal::{cookie, end_point, tera, EndPoint, HttpServer, Request, Response, GET};
+use cookie::Period;
+fn main() {
+	let mut server = HttpServer::create(end_point![0.0.0.0:8080], 10);
+	server.route(GET, "/cookie").reg(|req:&Request,res:& mut Response|{
+    	let mut cookie = cookie::Cookie::new(String::from("token"),req);
+    	cookie.insert(String::from("login"), true);
+    	cookie.set_path("/".to_string());
+    	cookie.set_max_age(2.days().from_now());  // the cookie will be expired after 2 days  
+    	res.write_string("ok").with_cookies(cookie);
+    });
+
+	server.route(GET, "/validate").reg(|req:&Request,res:& mut Response|{
+    	let cookie = cookie::Cookie::new(String::from("token"),req);
+    	let login:Option<bool> = cookie.get_data(String::from("login"));
+    	let s = format!("{:?}",login);
+    	res.write_string(&s);
+    });
+}
+````
 
 
