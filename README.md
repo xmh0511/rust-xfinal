@@ -158,6 +158,32 @@ fn main() {
     	let s = format!("{:?}",login);
     	res.write_string(&s);
     });
+
+	server.route(GET, "/cookie").reg(|req:&Request,res:& mut Response|{
+    	let mut cookie = cookie::Cookie::new(String::from("token"),req);
+    	cookie.insert(String::from("login"), true);
+    	cookie.set_path("/".to_string());
+    	cookie.set_max_age(2.days().from_now());
+		cookie.set_http_only(true);
+		let mut cookie2 = cookie::Cookie::new(String::from("test"),req);
+		cookie2.set_path("/".to_string());
+		cookie2.insert(String::from("test"), "abc");
+		cookie2.insert(String::from("age"), 18);
+		cookie2.set_http_only(false);
+    	res.write_string("ok").with_cookies([cookie,cookie2]);
+    });
+
+    server.route(GET, "/validate2").reg(|req:&Request,res:& mut Response|{
+    	let cookie = cookie::Cookie::new(String::from("token"),req);
+    	let login:Option<bool> = cookie.get_data(String::from("login"));
+		let cookie2 = cookie::Cookie::new(String::from("test"),req);
+		let test:Option<String> = cookie2.get_data("test".to_string());
+		let age:Option<i32> = cookie2.get_data("age".to_string());
+    	let s = format!("\"{:?}\",{:?},{:?}",login,test,age);
+		res.add_header("content-type".to_string(), "text/plain; charset=UTF-8".to_string());
+    	res.write_string(&s);
+    });
+
 }
 ````
 
