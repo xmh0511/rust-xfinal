@@ -4,7 +4,11 @@ use std::fs::OpenOptions;
 use std::io::Read;
 use std::net::TcpStream;
 
-use std::ops::{Range};
+use multimap::MultiMap;
+
+use std::sync::Arc;
+
+use std::ops::Range;
 
 use std::rc::Rc;
 
@@ -15,6 +19,11 @@ use std::io::prelude::*;
 pub use tera::{Context, Tera};
 
 pub mod mime;
+
+use hmac::Hmac;
+use sha2::Sha256;
+
+use crate::cookie::Cookie;
 
 pub mod http_response_table {
     const STATE_TABLE: [(u16, &str); 20] = [
@@ -81,6 +90,7 @@ pub struct Request<'a> {
     pub(super) version: &'a str,
     pub(super) body: BodyContent<'a>,
     pub(super) conn_: Rc<RefCell<&'a mut TcpStream>>,
+    pub(super) secret_key: Arc<Hmac<Sha256>>,
 }
 
 impl<'a> Request<'a> {
@@ -106,8 +116,8 @@ impl<'a> Request<'a> {
     }
 
     /// > Get the value of a parameter in the requested url
-    /// # For example 
-	/// > `/path?id=1`
+    /// # For example
+    /// > `/path?id=1`
     /// >> - `get_param("id")` returns 1, the key is case senstive
     pub fn get_param(&self, k: &str) -> Option<&str> {
         match self.url.split_once("?") {
@@ -131,7 +141,7 @@ impl<'a> Request<'a> {
 
     /// > Get the HashMap of the parameters in the requested url
     /// # For example
-	/// > `/path?id=1&flag=true`
+    /// > `/path?id=1&flag=true`
     /// >> - `get_params()` returns `{id:1, flag:true }`
     pub fn get_params(&self) -> Option<HashMap<&str, &str>> {
         match self.url.split_once("?") {
@@ -169,7 +179,7 @@ impl<'a> Request<'a> {
     /// > Query the value of www-form-urlencoded or the text part of the multipart-form
     /// >> - The key is not case senstive
     /// # For example
-	/// > Assume the form has the value `id=1`, then get_query("id") returns Some("1")
+    /// > Assume the form has the value `id=1`, then get_query("id") returns Some("1")
     ///
     pub fn get_query(&self, k: &str) -> Option<&str> {
         if let BodyContent::UrlForm(x) = &self.body {
@@ -223,7 +233,7 @@ impl<'a> Request<'a> {
     /// </form>
     ///
     ///```
-	/// > - `get_file("file1")` return the file's meta data
+    /// > - `get_file("file1")` return the file's meta data
     pub fn get_file(&self, k: &str) -> Option<&'_ MultipleFormFile> {
         if let BodyContent::Multi(x) = &self.body {
             let r = x.keys().find(|&ik| {
@@ -316,17 +326,32 @@ impl<'a> Request<'a> {
     }
 
     /// > Return the raw instance of TcpStream
-    /// >> - This method should be carefully used, 
+    /// >> - This method should be carefully used,
     /// It is better to only get some meta information of a connection, such as a peer IP
     pub fn get_conn(&self) -> Rc<RefCell<&'a mut TcpStream>> {
         Rc::clone(&self.conn_)
     }
 
+    /// > Return the requested http method
     pub fn get_method(&self) -> &str {
         self.method
     }
+
+    /// > Return the complete requested url
     pub fn get_url(&self) -> &str {
         self.url
+    }
+
+    pub fn get_secret_key(&self) -> Arc<Hmac<Sha256>> {
+        Arc::clone(&self.secret_key)
+    }
+
+    /// > Return the part of url exclude the parameters(if any)
+    pub fn url_to_path(&self) -> &str {
+        match self.url.find("?") {
+            Some(pos) => &self.url[..pos],
+            None => self.url,
+        }
     }
 }
 
@@ -336,7 +361,7 @@ pub struct ResponseConfig<'b, 'a> {
 }
 
 impl<'b, 'a> ResponseConfig<'b, 'a> {
-    fn get_map_key(map: &HashMap<String, String>, key: &str) -> Option<String> {
+    fn get_map_key(map: &MultiMap<String, String>, key: &str) -> Option<String> {
         let r = map.keys().find(|&ik| {
             if ik.to_lowercase() == key.to_lowercase() {
                 true
@@ -433,6 +458,42 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         }
         self
     }
+
+	/// > Specify cookies for the request
+	/// >> - Argument could be a single Cookie
+	/// >> - Or muliple Cookies: [Cookie,Cookie,...]
+    pub fn with_cookies<T: MoreThanOneCookie<Output = Cookie>>(&mut self, v: T) -> &mut Self {
+        for e in v.into_vec() {
+            match e.to_string() {
+                Some(s) => {
+					self.res.add_header(String::from("set-cookie"),s);
+				},
+                None => {continue;},
+            }
+        }
+        self
+    }
+}
+
+pub trait MoreThanOneCookie {
+    type Output;
+    fn into_vec(self) -> Vec<Self::Output>;
+}
+
+impl MoreThanOneCookie for Cookie {
+    type Output = Cookie;
+
+    fn into_vec(self) -> Vec<Self::Output> {
+        vec![self]
+    }
+}
+
+impl<const I: usize> MoreThanOneCookie for [Cookie; I] {
+    type Output = Cookie;
+
+    fn into_vec(self) -> Vec<Self::Output> {
+        Vec::from(self)
+    }
 }
 
 fn parse_range_content(v: &str) -> ResponseRangeMeta {
@@ -506,7 +567,7 @@ pub enum BodyType {
 }
 
 pub struct Response<'a> {
-    pub(super) header_pair: HashMap<String, String>,
+    pub(super) header_pair: MultiMap<String, String>,
     pub(super) version: &'a str,
     pub(super) method: &'a str,
     //pub(super) url: &'a str,
@@ -534,14 +595,14 @@ impl<'a> Response<'a> {
 
     /// > Remove a pair you have writed to a reponse header
     /// >> - The key is not case senstive
-    /// # For example 
-	/// ```
-	/// add_header(String::from("a"),String::from("b"))
-	/// ```
+    /// # For example
+    /// ```
+    /// add_header(String::from("a"),String::from("b"))
+    /// ```
     /// > Header: {a:b}
-	/// ```
+    /// ```
     /// remove_header(String::from("a"))
-	/// ```
+    /// ```
     /// > Header: {}
     pub fn remove_header(&mut self, key: String) {
         let r = self.header_pair.keys().find(|&ik| {
@@ -562,9 +623,9 @@ impl<'a> Response<'a> {
     }
 
     /// > Add a pair to the header of the response
-	/// ```
+    /// ```
     /// add_header(String::from("a"),String::from("b"))
-	/// ```
+    /// ```
     /// >  Header:{a:b}
     pub fn add_header(&mut self, key: String, value: String) {
         self.header_pair.insert(key, value);
@@ -576,7 +637,9 @@ impl<'a> Response<'a> {
         let state_text = http_response_table::get_httpstatus_from_code(self.http_state);
         buffs.extend_from_slice(format!("{} {}", self.version, state_text).as_bytes());
         for (k, v) in &self.header_pair {
-            buffs.extend_from_slice(format!("{}: {}\r\n", k, v).as_bytes());
+            for value in v {
+                buffs.extend_from_slice(format!("{}: {}\r\n", k, value).as_bytes());
+            }
         }
         buffs.extend_from_slice(b"\r\n");
         buffs
@@ -697,8 +760,8 @@ impl<'a> Response<'a> {
 
     /// > Check whether a pair exists in the header of a reponse
     /// # For example
-	/// > assume the header is {a:b}
-	/// 
+    /// > assume the header is {a:b}
+    ///
     /// `header_exist("a")` returns true
     /// > The key is not case senstive
     pub fn header_exist(&self, s: &str) -> bool {
@@ -783,7 +846,7 @@ impl<'a> Response<'a> {
     pub fn render_view(
         &mut self,
         factory: impl Fn(&tera::Context) -> tera::Result<String>,
-		context:&tera::Context
+        context: &tera::Context,
     ) -> ResponseConfig<'_, 'a> {
         match factory(context) {
             Ok(s) => {
@@ -891,7 +954,7 @@ impl LayzyBuffers {
         self.len as usize
     }
 
-    pub fn get_slice_from_range(&mut self, index: Range<usize>)-> Result<&[u8],io::Error> {
+    pub fn get_slice_from_range(&mut self, index: Range<usize>) -> Result<&[u8], io::Error> {
         match &mut self.buffs {
             LayzyBuffersType::Memory(buffs) => Ok(&mut buffs[index]),
             LayzyBuffersType::File(file_v) => {
@@ -899,40 +962,37 @@ impl LayzyBuffers {
                 let need_size = index.end - index.start;
                 let buffs = &mut file_v.buffs;
                 buffs.resize(need_size, b'\0');
-                match file.read(buffs){
-                    Ok(_) => {
-						return Ok(buffs)
-					},
+                match file.read(buffs) {
+                    Ok(_) => return Ok(buffs),
                     Err(e) => {
-						return Err(e);
-					},
+                        return Err(e);
+                    }
                 }
-                
             }
             LayzyBuffersType::None => unreachable!(),
         }
     }
 
-	// pub fn get_total_slice(& mut self)-> Result<&[u8],io::Error> {
+    // pub fn get_total_slice(& mut self)-> Result<&[u8],io::Error> {
     //     match &mut self.buffs {
     //         LayzyBuffersType::Memory(buffs) => {
-	// 			return Ok(buffs);
-	// 		},
+    // 			return Ok(buffs);
+    // 		},
     //         LayzyBuffersType::File(file_v) => {
     //             let file = &mut file_v.file;
     //             let buffs = &mut file_v.buffs;
     //             match file.read_to_end(buffs){
     //                 Ok(_) => {
-	// 					return Ok(buffs);
-	// 				},
+    // 					return Ok(buffs);
+    // 				},
     //                 Err(e) => {
-	// 					return Err(e);
-	// 				},
+    // 					return Err(e);
+    // 				},
     //             }
     //         }
     //         LayzyBuffersType::None => unreachable!(),
     //     }
-	// }
+    // }
 }
 
 // impl Index<Range<usize>> for LayzyBuffers {

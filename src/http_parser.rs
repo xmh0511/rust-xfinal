@@ -9,6 +9,10 @@ use std::str::Utf8Error;
 use std::sync::Arc;
 use std::{io, io::prelude::*};
 
+use sha2::Sha256;
+use hmac::{Hmac};
+use multimap::MultiMap;
+
 use uuid;
 
 pub mod connection;
@@ -88,6 +92,7 @@ pub struct ServerConfig {
     pub(super) max_body_size: usize,
     pub(super) max_header_size: usize,
     pub(super) read_buff_increase_size: usize,
+	pub(super) secret_key:Arc<Hmac<Sha256>>
 }
 
 enum HasBody {
@@ -133,9 +138,10 @@ fn construct_http_event(
         version,
         body,
         conn_: Rc::clone(&conn),
+		secret_key: Arc::clone(&server_config.secret_key)
     };
     let mut response = Response {
-        header_pair: HashMap::new(),
+        header_pair: MultiMap::new(),
         version,
         method,
         //url,
