@@ -19,9 +19,10 @@ This is the beginning of the aim to write a safe web server framework by Rust. F
 4. Chunked transfer
 5. Accept Range requests, which implies that rust-xfinal has supported to download file with the resume breakpoint.
 6. View render based on tera
+7. Support the resumable cookie(i.e the cookie can still be recognized after the server is restarted)
 
 ### Features that haven't been supported yet
-1. Cookie/Session
+1. ~Cookie/Session~
 
 ### Usage
 > 1. HTTP "hello, world"
