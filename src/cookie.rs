@@ -157,7 +157,7 @@ impl Cookie {
                 .ymd(t.date.year as i32, t.date.month, t.date.day)
                 .and_hms(t.hours, t.minutes, t.seconds);
             let gmt = time.with_timezone(&GMT);
-            gmt.to_string()
+            gmt.to_rfc2822()
         } else {
             String::from("Session")
         };
