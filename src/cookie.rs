@@ -173,9 +173,9 @@ impl Cookie {
         };
         let http_only = {
             if self.http_only {
-                ""
+				"HttpOnly;"
             } else {
-                "HttpOnly;"
+				""
             }
         };
         if let Some(token) = self.gen_token() {
