@@ -13,6 +13,10 @@ use sha2::Sha256;
 use hmac::{Hmac};
 use multimap::MultiMap;
 
+use serde_json::{Value};
+
+use std::collections::{BTreeMap};
+
 use uuid;
 
 pub mod connection;
@@ -138,7 +142,8 @@ fn construct_http_event(
         version,
         body,
         conn_: Rc::clone(&conn),
-		secret_key: Arc::clone(&server_config.secret_key)
+		secret_key: Arc::clone(&server_config.secret_key),
+		ctx:RefCell::new(BTreeMap::new())
     };
     let mut response = Response {
         header_pair: MultiMap::new(),

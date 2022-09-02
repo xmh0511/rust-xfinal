@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -24,6 +24,9 @@ use hmac::Hmac;
 use sha2::Sha256;
 
 use crate::cookie::Cookie;
+
+use serde_json::{Value};
+use std::collections::{BTreeMap};
 
 pub mod http_response_table {
     const STATE_TABLE: [(u16, &str); 20] = [
@@ -67,14 +70,23 @@ pub mod http_response_table {
         (7, "CONNECT"),
         (8, "TRACE"),
     ];
+	/// > Correspond to http GET
     pub const GET: u8 = 0;
+	/// > Correspond to http POST
     pub const POST: u8 = 1;
+	/// > Correspond to http OPTIONS
     pub const OPTIONS: u8 = 2;
+	/// > Correspond to http DELETE
     pub const DELETE: u8 = 3;
+	/// > Correspond to http HEAD
     pub const HEAD: u8 = 4;
+	/// > Correspond to http PUT
     pub const PUT: u8 = 5;
+	/// > Correspond to http PATCH
     pub const PATCH: u8 = 6;
+	/// > Correspond to http CONNECT
     pub const CONNECT: u8 = 7;
+	/// > Correspond to http TRACE
     pub const TRACE: u8 = 8;
     pub fn get_httpmethod_from_code(code: u8) -> &'static str {
         match HTTP_METHODS.binary_search_by_key(&code, |&(k, _)| k) {
@@ -91,6 +103,7 @@ pub struct Request<'a> {
     pub(super) body: BodyContent<'a>,
     pub(super) conn_: Rc<RefCell<&'a mut TcpStream>>,
     pub(super) secret_key: Arc<Hmac<Sha256>>,
+	pub(super) ctx:RefCell<BTreeMap<String,Value>>
 }
 
 impl<'a> Request<'a> {
@@ -353,6 +366,12 @@ impl<'a> Request<'a> {
             None => self.url,
         }
     }
+
+	/// > It is used to store user data
+	/// >> - share data between middlwares and routers(if any)
+	pub fn get_context(&self) -> &RefCell<BTreeMap<String,Value>>{
+		&self.ctx
+	}
 }
 
 pub struct ResponseConfig<'b, 'a> {
