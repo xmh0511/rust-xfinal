@@ -3,7 +3,7 @@ use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::sync::Arc;
 
-pub mod thread_pool;
+mod thread_pool;
 
 mod http_parser;
 
