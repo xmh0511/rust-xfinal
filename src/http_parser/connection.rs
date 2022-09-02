@@ -596,7 +596,7 @@ pub enum ResponseRangeMeta {
 }
 
 pub enum MemoryType {
-    String,
+    String(String),
     Binary,
 }
 
@@ -676,21 +676,22 @@ impl<'a> Response<'a> {
         if !self.header_exist("Content-Type") {
             match &self.body {
                 BodyType::Memory(kind, _) => {
-                    if let MemoryType::String = kind {
-                        match &self.charset {
+                    match kind {
+                        MemoryType::String(extension) => match &self.charset {
                             Some(charset) => {
                                 self.add_header(
                                     "Content-type".to_string(),
-                                    format!("text/plain; charset={}", charset),
+                                    format!("{}; charset={}",extension, charset),
                                 );
                             }
                             None => {
                                 self.add_header(
                                     "Content-type".to_string(),
-                                    format!("text/plain; charset=utf-8"),
+                                    format!("{}; charset=utf-8",extension),
                                 );
                             }
-                        }
+                        },
+                        MemoryType::Binary => {},
                     };
                 }
                 BodyType::File(_, extension) => {
@@ -871,7 +872,7 @@ impl<'a> Response<'a> {
     /// > Write a utf-8 String to client
     pub fn write_string(&mut self, v: &str) -> ResponseConfig<'_, 'a> {
         self.add_header(String::from("Content-length"), v.len().to_string());
-        self.body = BodyType::Memory(MemoryType::String, v.into());
+        self.body = BodyType::Memory(MemoryType::String("text/plain".to_string()), v.into());
         ResponseConfig {
             res: self,
             has_failure: false,
@@ -963,7 +964,27 @@ impl<'a> Response<'a> {
                 match file.read_to_string(&mut s) {
                     Ok(_) => match Tera::one_off(&s, &context, true) {
                         Ok(s) => {
-                            return self.write_string(&s);
+                            self.add_header(String::from("Content-length"), s.len().to_string());
+                            let extension = std::path::Path::new(&path)
+                                .extension()
+                                .and_then(OsStr::to_str);
+
+                            match extension {
+                                Some(extension) => {
+                                    let content_type = mime::extension_to_content_type(extension);
+                                    self.body = BodyType::Memory(
+                                        MemoryType::String(content_type.to_string()),
+                                        s.into(),
+                                    );
+                                }
+                                None => {
+                                    self.body = BodyType::Memory(MemoryType::String("text/plain".to_string()), s.into());
+                                }
+                            }
+                            return ResponseConfig {
+                                res: self,
+                                has_failure: false,
+                            };
                         }
                         Err(e) => {
                             self.write_string(&format!("Render view error: {}", e.to_string()))
