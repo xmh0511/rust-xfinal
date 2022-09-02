@@ -99,6 +99,7 @@ http_server.route(GET, "/query").reg(|req: &Request, res: &mut Response| {
 });
 ````
 > 4. Chunked transfer and/or Rangeable
+>> Range function almost need to pair with HEAD
 ````rust
 http_server.route([GET,HEAD], "/query").reg(|_req: &Request, res: &mut Response| {
     // file: res.write_file("./upload/test.mp4",200).chunked().enable_range();
