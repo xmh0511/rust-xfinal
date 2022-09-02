@@ -2,7 +2,7 @@
 A safe and performance web server framework that is written by Rust.
 
 ### Introduction
-This is the beginning of the aim to write a safe web server framework by Rust. For now, this repository has not provided complete ~and stable~ functions yet, as [xfinal](https://github.com/xmh0511/xfinal) has done, written by modern c++. The aim is to build up a web server framework, which has the same functionalities as `xfinal` has.
+~This is the beginning of the aim to write a safe web server framework by Rust. For now, this repository has not provided complete and stable functions yet, as [xfinal](https://github.com/xmh0511/xfinal) has done, written by modern c++.~ The aim is to build up a web server framework, which has the same functionalities as `xfinal` has.
 
 ### Advantages 
 1. Since the advantages of Rust are that it is safe on memory and multiple threads, and it is a modern programming language that has almost no pieces baggage c++ has, the framework that is written based on Rust has no worry about the hard problems with memory and data race. Rust can guarantee the safety of these aspects. 
@@ -186,5 +186,37 @@ fn main() {
 
 }
 ````
-
+> 8. Transfer user data between middlewares and the eventual router 
+````rust
+    use rust_xfinal::{JsonValue,inject_middlewares};
+    fn interrupter(req: &Request, res: &mut Response) -> bool {
+        match req.get_param("id") {
+            Some(v) => {
+                if v == "1" {
+					let mut ctx = req.context().borrow_mut();
+					ctx.insert("number".to_string(), JsonValue::Number(20.into()));
+                    true
+                } else {
+                    res.write_string("invalid request, invalid id value")
+                        .status(400);
+                    false
+                }
+            }
+            None => {
+                res.write_string("invalid request, no id").status(400);
+                false
+            }
+        }
+    }
+	server.route(GET, "/transfer").reg_with_middlewares(
+        inject_middlewares![interrupter],
+        |req: &Request, res: &mut Response| {
+			let ctx = req.context().borrow_mut();
+			let d = ctx.get(&"number".to_string());
+			let s = format!("abc,{:?}",d);
+			let method = req.get_method();
+            res.write_string(&s);
+        },
+    );
+````
 

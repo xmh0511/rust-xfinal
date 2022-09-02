@@ -355,7 +355,7 @@ impl<'a> Request<'a> {
         self.url
     }
 
-    pub fn get_secret_key(&self) -> Arc<Hmac<Sha256>> {
+    pub(crate) fn get_secret_key(&self) -> Arc<Hmac<Sha256>> {
         Arc::clone(&self.secret_key)
     }
 
@@ -369,7 +369,8 @@ impl<'a> Request<'a> {
 
 	/// > It is used to store user data
 	/// >> - share data between middlwares and routers(if any)
-	pub fn context(&self) -> &RefCell<BTreeMap<String,Value>>{
+	/// 
+	pub fn get_context(&self) -> &RefCell<BTreeMap<String,Value>>{
 		&self.ctx
 	}
 }
