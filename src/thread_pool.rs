@@ -6,7 +6,7 @@ struct MyTask<T> {
     task: thread::JoinHandle<()>,
 	sender:Sender<T>
 }
-pub struct ThreadPool<T> {
+pub(crate) struct ThreadPool<T> {
     tasks: Vec<Box<MyTask<T>>>,
 	index:u16,
 	max:u16

@@ -9,12 +9,11 @@ use std::str::Utf8Error;
 use std::sync::Arc;
 use std::{io, io::prelude::*};
 
-use sha2::Sha256;
-use hmac::{Hmac};
+use hmac::Hmac;
 use multimap::MultiMap;
+use sha2::Sha256;
 
-
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use uuid;
 
@@ -95,7 +94,7 @@ pub struct ServerConfig {
     pub(super) max_body_size: usize,
     pub(super) max_header_size: usize,
     pub(super) read_buff_increase_size: usize,
-	pub(super) secret_key:Arc<Hmac<Sha256>>
+    pub(super) secret_key: Arc<Hmac<Sha256>>,
 }
 
 enum HasBody {
@@ -141,8 +140,8 @@ fn construct_http_event(
         version,
         body,
         conn_: Rc::clone(&conn),
-		secret_key: Arc::clone(&server_config.secret_key),
-		ctx:RefCell::new(BTreeMap::new())
+        secret_key: Arc::clone(&server_config.secret_key),
+        ctx: RefCell::new(BTreeMap::new()),
     };
     let mut response = Response {
         header_pair: MultiMap::new(),
@@ -382,7 +381,7 @@ fn write_once(stream: &mut TcpStream, response: &mut Response) -> io::Result<()>
             if end > total_len {
                 end = total_len;
             }
-            let slice = lazy_buffs.get_slice_from_range(start..end)?;//&mut lazy_buffs[start..end];
+            let slice = lazy_buffs.get_slice_from_range(start..end)?; //&mut lazy_buffs[start..end];
             stream.write(slice)?;
             start = end;
         }
@@ -409,7 +408,7 @@ fn write_chunk(stream: &mut TcpStream, response: &mut Response) -> io::Result<()
         if end > lazy_buffs.len() {
             end = lazy_buffs.len();
         }
-        let slice = lazy_buffs.get_slice_from_range(start..end)?;//&mut lazy_buffs[start..end];
+        let slice = lazy_buffs.get_slice_from_range(start..end)?; //&mut lazy_buffs[start..end];
         let size = end - start;
         let size = format!("{:X}", size);
         stream.write(size.as_bytes())?;

@@ -2,7 +2,7 @@
 A safe and performance web server framework that is written by Rust.
 
 ### Introduction
-~This is the beginning of the aim to write a safe web server framework by Rust. For now, this repository has not provided complete and stable functions yet, as [xfinal](https://github.com/xmh0511/xfinal) has done, written by modern c++.~ The aim is to build up a web server framework, which has the same functionalities as `xfinal` has.
+~This is the beginning of the aim to write a safe web server framework by Rust. For now, this repository has not provided complete and stable functions yet, as [xfinal](https://github.com/xmh0511/xfinal) has done, written by modern c++.~ The aim is to build up a simply used, performance, and safe web server framework.
 
 ### Advantages 
 1. Since the advantages of Rust are that it is safe on memory and multiple threads, and it is a modern programming language that has almost no pieces baggage c++ has, the framework that is written based on Rust has no worry about the hard problems with memory and data race. Rust can guarantee the safety of these aspects. 
@@ -20,9 +20,10 @@ A safe and performance web server framework that is written by Rust.
 5. Accept Range requests, which implies that rust-xfinal has supported to download file with the resume breakpoint.
 6. View render based on tera
 7. Support the resumable cookie(i.e the cookie can still be recognized after the server is restarted)
+8. Support transfer user data from middlwares to eventual router
 
 ### Features that haven't been supported yet
-1. ~Cookie/Session~
+1. Seems not to have
 
 ### Usage
 > 1. HTTP "hello, world"
