@@ -120,10 +120,10 @@ http_server.route(GET, "/wildcard/*").reg(|_req: &Request, res: &mut Response|{
 ````rust
 use rust_xfinal::{EndPoint,end_point,HttpServer,GET, Request,Response,tera};
 
-fn render(context:&Request) -> tera::Result<String>{
+fn render(ctx:&Request) -> tera::Result<String>{
 	let mut context = tera::Context::new();
-	context.insert("text",req.url().to_string());
-	let mut t = tera::Tera::new("template/**/*")?;  // customize your own tera whatever you want
+	context.insert("text",&ctx.get_url().to_string());
+	let t = tera::Tera::new("template/**/*")?;  // customize your own tera whatever you want
 	return t.render("test.html",&context);
 }
 fn main() {
