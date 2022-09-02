@@ -936,8 +936,8 @@ impl<'a> Response<'a> {
     /// >>> - The factory permits you customize the behavior of the tera engine
     pub fn render_view(
         &mut self,
-        factory: impl Fn(&tera::Context) -> tera::Result<String>,
-        context: &tera::Context,
+        factory: impl Fn(&Request) -> tera::Result<String>,
+        context: &Request,
     ) -> ResponseConfig<'_, 'a> {
         match factory(context) {
             Ok(s) => {
