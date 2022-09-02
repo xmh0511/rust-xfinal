@@ -1,4 +1,4 @@
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -25,8 +25,8 @@ use sha2::Sha256;
 
 use crate::cookie::Cookie;
 
-use serde_json::{Value};
-use std::collections::{BTreeMap};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 pub mod http_response_table {
     const STATE_TABLE: [(u16, &str); 20] = [
@@ -70,23 +70,23 @@ pub mod http_response_table {
         (7, "CONNECT"),
         (8, "TRACE"),
     ];
-	/// > Correspond to http GET
+    /// > Correspond to http GET
     pub const GET: u8 = 0;
-	/// > Correspond to http POST
+    /// > Correspond to http POST
     pub const POST: u8 = 1;
-	/// > Correspond to http OPTIONS
+    /// > Correspond to http OPTIONS
     pub const OPTIONS: u8 = 2;
-	/// > Correspond to http DELETE
+    /// > Correspond to http DELETE
     pub const DELETE: u8 = 3;
-	/// > Correspond to http HEAD
+    /// > Correspond to http HEAD
     pub const HEAD: u8 = 4;
-	/// > Correspond to http PUT
+    /// > Correspond to http PUT
     pub const PUT: u8 = 5;
-	/// > Correspond to http PATCH
+    /// > Correspond to http PATCH
     pub const PATCH: u8 = 6;
-	/// > Correspond to http CONNECT
+    /// > Correspond to http CONNECT
     pub const CONNECT: u8 = 7;
-	/// > Correspond to http TRACE
+    /// > Correspond to http TRACE
     pub const TRACE: u8 = 8;
     pub fn get_httpmethod_from_code(code: u8) -> &'static str {
         match HTTP_METHODS.binary_search_by_key(&code, |&(k, _)| k) {
@@ -103,7 +103,7 @@ pub struct Request<'a> {
     pub(super) body: BodyContent<'a>,
     pub(super) conn_: Rc<RefCell<&'a mut TcpStream>>,
     pub(super) secret_key: Arc<Hmac<Sha256>>,
-	pub(super) ctx:RefCell<BTreeMap<String,Value>>
+    pub(super) ctx: RefCell<BTreeMap<String, Value>>,
 }
 
 impl<'a> Request<'a> {
@@ -367,12 +367,12 @@ impl<'a> Request<'a> {
         }
     }
 
-	/// > It is used to store user data
-	/// >> - share data between middlwares and routers(if any)
-	/// 
-	pub fn get_context(&self) -> &RefCell<BTreeMap<String,Value>>{
-		&self.ctx
-	}
+    /// > It is used to store user data
+    /// >> - share data between middlwares and routers(if any)
+    ///
+    pub fn get_context(&self) -> &RefCell<BTreeMap<String, Value>> {
+        &self.ctx
+    }
 }
 
 pub struct ResponseConfig<'b, 'a> {
@@ -425,8 +425,8 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
             return self;
         }
         match &self.res.body {
-            BodyType::Memory(_) => {}
-            BodyType::File(_) => {
+            BodyType::Memory(_, _) => {}
+            BodyType::File(_, _) => {
                 if !self.res.header_exist("Content-Disposition") {
                     self.res.add_header(
                         "Content-Disposition".to_string(),
@@ -448,22 +448,24 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
             self.res
                 .add_header(String::from("Accept-Ranges"), String::from("bytes"));
             match &self.res.body {
-                BodyType::Memory(buffs) => {
+                BodyType::Memory(_, buffs) => {
                     self.res
                         .add_header(String::from("Content-length"), buffs.len().to_string());
                     self.res.http_state = 200;
                 }
-                BodyType::File(path) => match std::fs::OpenOptions::new().read(true).open(path) {
-                    Ok(file) => {
-                        let file_size = file.metadata().unwrap().len();
-                        self.res
-                            .add_header(String::from("Content-length"), file_size.to_string());
-                        self.res.http_state = 200;
+                BodyType::File(path, _) => {
+                    match std::fs::OpenOptions::new().read(true).open(path) {
+                        Ok(file) => {
+                            let file_size = file.metadata().unwrap().len();
+                            self.res
+                                .add_header(String::from("Content-length"), file_size.to_string());
+                            self.res.http_state = 200;
+                        }
+                        Err(_) => {
+                            self.res.write_state(404);
+                        }
                     }
-                    Err(_) => {
-                        self.res.write_state(404);
-                    }
-                },
+                }
                 BodyType::None => {}
             }
         } else {
@@ -479,18 +481,31 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         self
     }
 
-	/// > Specify cookies for the request
-	/// >> - Argument could be a single Cookie
-	/// >> - Or muliple Cookies: [Cookie,Cookie,...]
+    /// > Specify cookies for the request
+    /// >> - Argument could be a single Cookie
+    /// >> - Or muliple Cookies: [Cookie,Cookie,...]
     pub fn with_cookies<T: MoreThanOneCookie<Output = Cookie>>(&mut self, v: T) -> &mut Self {
+        if self.has_failure {
+            return self;
+        }
         for e in v.into_vec() {
             match e.to_string() {
                 Some(s) => {
-					self.res.add_header(String::from("set-cookie"),s);
-				},
-                None => {continue;},
+                    self.res.add_header(String::from("set-cookie"), s);
+                }
+                None => {
+                    continue;
+                }
             }
         }
+        self
+    }
+
+    pub fn charset(&mut self, v: &str) -> &mut Self {
+        if self.has_failure {
+            return self;
+        }
+        self.res.charset = Some(v.to_string());
         self
     }
 }
@@ -580,9 +595,14 @@ pub enum ResponseRangeMeta {
     None,
 }
 
+pub enum MemoryType {
+    String,
+    Binary,
+}
+
 pub enum BodyType {
-    Memory(Vec<u8>),
-    File(String),
+    Memory(MemoryType, Vec<u8>),
+    File(String, Option<String>),
     None,
 }
 
@@ -597,6 +617,7 @@ pub struct Response<'a> {
     pub(super) conn_: Rc<RefCell<&'a mut TcpStream>>,
     pub(super) range: ResponseRangeMeta,
     pub(super) request_header: HashMap<&'a str, &'a str>,
+    pub(super) charset: Option<String>,
 }
 
 impl<'a> Response<'a> {
@@ -651,11 +672,55 @@ impl<'a> Response<'a> {
         self.header_pair.insert(key, value);
     }
 
-    pub(super) fn header_to_string(&self) -> Vec<u8> {
+    fn set_default_content_type(&mut self) {
+        if !self.header_exist("Content-Type") {
+            match &self.body {
+                BodyType::Memory(kind, _) => {
+                    if let MemoryType::String = kind {
+                        match &self.charset {
+                            Some(charset) => {
+                                self.add_header(
+                                    "Content-type".to_string(),
+                                    format!("text/plain; charset={}", charset),
+                                );
+                            }
+                            None => {
+                                self.add_header(
+                                    "Content-type".to_string(),
+                                    format!("text/plain; charset=utf-8"),
+                                );
+                            }
+                        }
+                    };
+                }
+                BodyType::File(_, extension) => {
+                    if let Some(x) = extension {
+                        match &self.charset {
+                            Some(charset) => {
+                                self.add_header(
+                                    "Content-type".to_string(),
+                                    format!("{}; charset={}", x, charset),
+                                );
+                            }
+                            None => {
+                                self.add_header(
+                                    "Content-type".to_string(),
+                                    format!("{}; charset=utf-8", x),
+                                );
+                            }
+                        }
+                    }
+                }
+                BodyType::None => {}
+            }
+        }
+    }
+    pub(super) fn header_to_string(&mut self) -> Vec<u8> {
         //println!("header pairs: {:#?}",self.header_pair);
         let mut buffs = Vec::new();
         let state_text = http_response_table::get_httpstatus_from_code(self.http_state);
         buffs.extend_from_slice(format!("{} {}", self.version, state_text).as_bytes());
+        self.set_default_content_type();
         for (k, v) in &self.header_pair {
             for value in v {
                 buffs.extend_from_slice(format!("{}: {}\r\n", k, value).as_bytes());
@@ -667,8 +732,8 @@ impl<'a> Response<'a> {
 
     fn take_body_size(&mut self) -> io::Result<u64> {
         match &self.body {
-            BodyType::Memory(buff) => Ok(buff.len() as u64),
-            BodyType::File(path) => match std::fs::OpenOptions::new().read(true).open(path) {
+            BodyType::Memory(_, buff) => Ok(buff.len() as u64),
+            BodyType::File(path, _) => match std::fs::OpenOptions::new().read(true).open(path) {
                 Ok(file) => Ok(file.metadata()?.len()),
                 Err(e) => Err(e),
             },
@@ -722,7 +787,7 @@ impl<'a> Response<'a> {
                 self.http_state = 206;
 
                 match &self.body {
-                    BodyType::Memory(buffs) => {
+                    BodyType::Memory(_, buffs) => {
                         let slice = &buffs[beg_pos as usize..=end_pos as usize];
                         let mut ret_buff = Vec::new();
                         ret_buff.extend_from_slice(slice);
@@ -731,7 +796,7 @@ impl<'a> Response<'a> {
                             len: slice.len() as u64,
                         });
                     }
-                    BodyType::File(path) => {
+                    BodyType::File(path, _) => {
                         let mut file = std::fs::OpenOptions::new().read(true).open(path)?;
                         let need_size = end_pos - beg_pos + 1;
                         file.seek(std::io::SeekFrom::Start(beg_pos))?;
@@ -752,13 +817,13 @@ impl<'a> Response<'a> {
                 };
             }
             ResponseRangeMeta::None => match &self.body {
-                BodyType::Memory(buffs) => {
+                BodyType::Memory(_, buffs) => {
                     return Ok(LayzyBuffers {
                         buffs: LayzyBuffersType::Memory(buffs.clone()),
                         len: buffs.len() as u64,
                     });
                 }
-                BodyType::File(path) => {
+                BodyType::File(path, _) => {
                     let file = std::fs::OpenOptions::new().read(true).open(path)?;
                     return Ok(LayzyBuffers {
                         buffs: LayzyBuffersType::File(FileType {
@@ -798,20 +863,25 @@ impl<'a> Response<'a> {
         }
     }
 
-	/// > Get response header
-	/// >> - Return a Vector since a single key can correspond to multiple values in the response header.
-	pub fn get_header(&self, k:&str) ->Option<&Vec<String>>{
-		self.header_pair.get_vec(k)
-	}
+    /// > Get response header
+    /// >> - Return a Vector since a single key can correspond to multiple values in the response header.
+    pub fn get_header(&self, k: &str) -> Option<&Vec<String>> {
+        self.header_pair.get_vec(k)
+    }
     /// > Write a utf-8 String to client
     pub fn write_string(&mut self, v: &str) -> ResponseConfig<'_, 'a> {
-        self.write_binary(v.into())
+        self.add_header(String::from("Content-length"), v.len().to_string());
+        self.body = BodyType::Memory(MemoryType::String, v.into());
+        ResponseConfig {
+            res: self,
+            has_failure: false,
+        }
     }
 
     /// > Write binary data to client
     pub fn write_binary(&mut self, v: Vec<u8>) -> ResponseConfig<'_, 'a> {
         self.add_header(String::from("Content-length"), v.len().to_string());
-        self.body = BodyType::Memory(v);
+        self.body = BodyType::Memory(MemoryType::Binary, v);
         ResponseConfig {
             res: self,
             has_failure: false,
@@ -838,17 +908,16 @@ impl<'a> Response<'a> {
                 match extension {
                     Some(extension) => {
                         let content_type = mime::extension_to_content_type(extension);
-                        if content_type != "" {
-                            if !self.header_exist("Content-Type") {
-                                self.add_header(
-                                    String::from("Content-Type"),
-                                    content_type.to_string(),
-                                );
-                            }
-                        }
+                        self.body = BodyType::File(path, Some(content_type.to_string()));
                     }
-                    None => {}
+                    None => {
+                        self.body = BodyType::File(path, None);
+                    }
                 }
+                return ResponseConfig {
+                    res: self,
+                    has_failure: false,
+                };
             }
             Err(_) => {
                 self.write_string(&format!("{} file not found", path))
@@ -858,11 +927,6 @@ impl<'a> Response<'a> {
                     has_failure: true,
                 };
             }
-        }
-        self.body = BodyType::File(path);
-        ResponseConfig {
-            res: self,
-            has_failure: false,
         }
     }
 

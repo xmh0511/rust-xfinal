@@ -154,6 +154,7 @@ fn construct_http_event(
         conn_: Rc::clone(&conn),
         range: ResponseRangeMeta::None,
         request_header: head_map,
+		charset:None
     };
 
     do_router(&router, &request, &mut response);
