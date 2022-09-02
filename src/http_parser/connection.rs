@@ -1,4 +1,4 @@
-use std::cell::{RefCell, RefMut};
+use std::cell::{RefCell};
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Read;

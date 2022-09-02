@@ -25,9 +25,13 @@ pub use serde_json;
 
 pub mod cookie;
 
+pub use cookie::Period;
+
+
+
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use uuid;
+pub use uuid;
 
 pub trait SerializationMethods {
     fn serialize(&self) -> Vec<&'static str>;
