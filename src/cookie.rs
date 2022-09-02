@@ -168,7 +168,7 @@ impl Cookie {
             if self.domain == "" {
                 "".to_string()
             } else {
-                format!("{};", self.domain)
+                format!("domain={};", self.domain)
             }
         };
         let http_only = {
