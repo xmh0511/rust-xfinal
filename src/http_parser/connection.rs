@@ -369,7 +369,7 @@ impl<'a> Request<'a> {
 
 	/// > It is used to store user data
 	/// >> - share data between middlwares and routers(if any)
-	pub fn get_context(&self) -> &RefCell<BTreeMap<String,Value>>{
+	pub fn context(&self) -> &RefCell<BTreeMap<String,Value>>{
 		&self.ctx
 	}
 }
