@@ -444,9 +444,9 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         if self.has_failure {
             return self;
         }
+		self.res
+		.add_header(String::from("Accept-Ranges"), String::from("bytes"));
         if self.res.method == "HEAD" {
-            self.res
-                .add_header(String::from("Accept-Ranges"), String::from("bytes"));
             match &self.res.body {
                 BodyType::Memory(_, buffs) => {
                     self.res
