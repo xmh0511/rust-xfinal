@@ -374,8 +374,9 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
             if conn_data.server_config.open_log {
                 let now = get_current_date();
                 println!(
-                    "[{}] >>> error in reading http header: {}",
+                    "[{}] >>> error in reading http header, type: {}, {}",
                     now,
+					e.kind().to_string(),
                     e.to_string()
                 );
             }
