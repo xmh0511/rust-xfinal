@@ -29,6 +29,11 @@ pub mod cookie;
 
 pub use cookie::Period;
 
+pub use hmac;
+pub use sha2;
+pub use chrono;
+pub use chrono_tz;
+
 
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -256,14 +261,16 @@ impl HttpServer {
                                 Ok(_) => {}
                                 Err(e) => {
                                     if self.config_.open_log {
-                                        println!("Send Connection Error: {}", e.to_string());
+										let now = http_parser::get_current_date();
+                                        println!("[{}] >>> error in send connection: {}",now, e.to_string());
                                     }
                                 }
                             }
                         }
                         Err(e) => {
                             if self.config_.open_log {
-                                println!("on connection error:{}", e.to_string());
+								let now = http_parser::get_current_date();
+                                println!("[{}] >>> error on incoming:{}",now, e.to_string());
                             }
                         }
                     }

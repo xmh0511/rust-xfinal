@@ -5,7 +5,6 @@ use std::io::ErrorKind;
 use std::net::{Shutdown, TcpStream};
 
 use std::rc::Rc;
-use std::str::Utf8Error;
 use std::sync::Arc;
 use std::{io, io::prelude::*};
 
@@ -16,6 +15,8 @@ use sha2::Sha256;
 use std::collections::BTreeMap;
 
 use uuid;
+
+use chrono;
 
 pub mod connection;
 pub use connection::{
@@ -55,30 +56,6 @@ where
     }
 }
 
-trait UnifiedError {
-    fn to_string(&self) -> String;
-    fn kind(&self) -> ErrorKind;
-}
-
-impl UnifiedError for Utf8Error {
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
-    }
-
-    fn kind(&self) -> ErrorKind {
-        io::ErrorKind::InvalidData
-    }
-}
-
-impl UnifiedError for io::Error {
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
-    }
-    fn kind(&self) -> ErrorKind {
-        io::Error::kind(self)
-    }
-}
-
 #[derive(Clone)]
 pub struct ConnectionData {
     pub(super) router_map: RouterMap,
@@ -101,6 +78,12 @@ enum HasBody {
     Len(usize),
     None,
     Bad,
+}
+
+pub(crate) fn get_current_date() -> String {
+    let now = chrono::Local::now();
+    let now = now.format("%Y-%m-%d %H:%M:%S");
+    now.to_string()
 }
 
 fn has_body(head_map: &HashMap<&str, &str>) -> HasBody {
@@ -164,10 +147,18 @@ fn construct_http_event(
     let mut stream = conn.borrow_mut();
     if !response.chunked.enable {
         match write_once(*stream, &mut response) {
-            Ok(_) => {}
+            Ok(_) => {
+                return true;
+            }
             Err(e) => {
                 if server_config.open_log {
-                    println!("write once error:{}", ToString::to_string(&e));
+                    let now = get_current_date();
+                    println!(
+                        "[{}] >>> line: {}, error in write_once: {}",
+                        now,
+                        line!(),
+                        ToString::to_string(&e)
+                    );
                 }
                 return false;
             }
@@ -175,16 +166,23 @@ fn construct_http_event(
     } else {
         // chunked transfer
         match write_chunk(*stream, &mut response) {
-            Ok(_) => {}
+            Ok(_) => {
+                return true;
+            }
             Err(e) => {
                 if server_config.open_log {
-                    println!("write chunked error:{}", ToString::to_string(&e));
+                    let now = get_current_date();
+                    println!(
+                        "[{}] >>> line: {}, error in write_chunk: {}",
+                        now,
+                        line!(),
+                        ToString::to_string(&e)
+                    );
                 }
                 return false;
             }
         }
     }
-    true
 }
 
 fn is_keep_alive(head_map: &HashMap<&str, &str>) -> bool {
@@ -256,7 +254,12 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                                 }
                                 if let BodyContent::TooLarge = body {
                                     if conn_data.server_config.open_log {
-                                        println!("the non-multiple-form body is too large");
+                                        let now = get_current_date();
+                                        println!(
+                                            "[{}] >>> line: {}, the non-multipart-form body is too large",
+                                            now,
+											line!()
+                                        );
                                     }
                                     break;
                                 }
@@ -293,7 +296,12 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                                 }
                                 if let BodyContent::TooLarge = body {
                                     if conn_data.server_config.open_log {
-                                        println!("the non-multiple-form body is too large");
+                                        let now = get_current_date();
+                                        println!(
+                                            "[{}] >>> line: {},  the non-multipart-form body is too large",
+                                            now,
+											line!()
+                                        );
                                     }
                                     break;
                                 }
@@ -335,7 +343,12 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                         }
                         HasBody::Bad => {
                             if conn_data.server_config.open_log {
-                                println!("invalid http body content");
+                                let now = get_current_date();
+                                println!(
+                                    "[{}] >>> line: {}, invalid http body content",
+                                    now,
+                                    line!()
+                                );
                             }
                             let _ = stream.shutdown(Shutdown::Both);
                             break;
@@ -344,7 +357,12 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                 }
                 Err(e) => {
                     if conn_data.server_config.open_log {
-                        println!("invalid http head content:{}", ToString::to_string(&e));
+                        let now = get_current_date();
+                        println!(
+                            "[{}] >>> error in parse_header: {}",
+                            now,
+                            ToString::to_string(&e)
+                        );
                     }
                     let _ = stream.shutdown(Shutdown::Both);
                     break;
@@ -352,7 +370,12 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
             }
         } else if let Err(e) = read_result {
             if conn_data.server_config.open_log {
-                println!("error during reading header:{}", e.to_string());
+                let now = get_current_date();
+                println!(
+                    "[{}] >>> error in reading http header: {}",
+                    now,
+                    e.to_string()
+                );
             }
             let _ = stream.shutdown(Shutdown::Both);
             break;
@@ -374,6 +397,7 @@ fn write_once(stream: &mut TcpStream, response: &mut Response) -> io::Result<()>
         let chunked_size = response.chunked.chunk_size;
         let mut start = 0;
         stream.write(&s)?;
+        stream.flush()?;
         loop {
             if start >= total_len {
                 break;
@@ -459,7 +483,7 @@ fn find_double_crlf(slice: &[u8]) -> (bool, i64) {
 fn read_http_head(
     stream: &mut TcpStream,
     server_config: &ServerConfig,
-) -> Result<(String, Option<Vec<u8>>), Box<dyn UnifiedError>> {
+) -> Result<(String, Option<Vec<u8>>), io::Error> {
     let mut read_buffs = Vec::new();
     read_buffs.resize(server_config.read_buff_increase_size, b'\0');
     let mut total_read_size = 0;
@@ -470,9 +494,9 @@ fn read_http_head(
             //&mut read_buffs[start_read_pos..]
             Ok(read_size) => {
                 if read_size == 0 {
-                    let info = format!("file:{}, line: {}, lost connection", file!(), line!());
+                    let info = format!("http_parser.rs line: {}, lost connection", line!());
                     let e = io::Error::new(io::ErrorKind::InvalidInput, info);
-                    return Err(Box::new(e));
+                    return Err(e);
                 }
                 total_read_size += read_size;
                 let slice = &read_buffs[..total_read_size];
@@ -490,14 +514,16 @@ fn read_http_head(
                             return Ok((s.to_string(), None));
                         }
                         Err(e) => {
-                            //println!("{:#?}",&read_buffs[..pos]);
-                            return Err(Box::new(e));
+                            let msg = format!("line: {}, {}", line!(), ToString::to_string(&e));
+                            let err = io::Error::new(io::ErrorKind::InvalidData, msg);
+                            return Err(err);
                         }
                     }
                 } else {
                     if total_read_size > server_config.max_header_size {
-                        let e = io::Error::new(io::ErrorKind::InvalidData, "header too large");
-                        return Err(Box::new(e));
+                        let msg = format!("line: {}, header too large", line!());
+                        let e = io::Error::new(io::ErrorKind::InvalidData, msg);
+                        return Err(e);
                     }
                     start_read_pos = total_read_size;
                     let len = read_buffs.len();
@@ -506,12 +532,9 @@ fn read_http_head(
                 }
             }
             Err(e) => {
-                //println!("error occurs here");
-                // if e.kind() == io::ErrorKind::InvalidInput{
-                // 	println!("{:?},{}",read_buffs.len(),start_read_pos);
-                // 	panic!()
-                // }
-                return Err(Box::new(e));
+                let msg = format!("line: {}, {}", line!(), ToString::to_string(&e));
+                let err = io::Error::new(e.kind(), msg);
+                return Err(err);
             }
         }
     }
@@ -544,10 +567,8 @@ fn parse_header(
                         head_map.insert(key.trim(), value.trim());
                     }
                     None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "invalid k/v pair in head",
-                        ));
+                        let msg = format!("line: {}, invalid k/v pair in head", line!());
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                     }
                 }
                 //head_map.insert(String::from(pair[0]),pair[1]);
@@ -556,10 +577,13 @@ fn parse_header(
             // method, url, version,header_pairs
             Ok((url_result[0], url_result[1], url_result[2], head_map))
         }
-        None => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid Header:No METHOD URL VERSION\\r\\n",
-        )),
+        None => {
+            let msg = format!(
+                "line: {}, invalid Header:No METHOD URL VERSION\\r\\n",
+                line!()
+            );
+            return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+        }
     }
 }
 
@@ -766,7 +790,13 @@ fn read_body_according_to_type<'a>(
                             }
                             Err(e) => {
                                 if server_config.open_log {
-                                    println!("{}", ToString::to_string(&e));
+                                    let now = get_current_date();
+                                    println!(
+                                        "[{}] >>> line: {}, {}",
+                                        now,
+                                        line!(),
+                                        ToString::to_string(&e)
+                                    );
                                 }
                                 return BodyContent::Bad;
                             }
@@ -785,7 +815,13 @@ fn read_body_according_to_type<'a>(
                         }
                         Err(e) => {
                             if server_config.open_log {
-                                println!("{}", ToString::to_string(&e));
+                                let now = get_current_date();
+                                println!(
+                                    "[{}] >>> line: {}, {}",
+                                    now,
+                                    line!(),
+                                    ToString::to_string(&e)
+                                );
                             }
                             return BodyContent::Bad;
                         }
@@ -1085,8 +1121,7 @@ fn read_multiple_form_body<'a>(
                             Ok(size) => {
                                 if size == 0 {
                                     let info = format!(
-                                        "file:{}, line: {}, lost connection",
-                                        file!(),
+                                        "http_parser.rs line: {}, lost connection",
                                         line!()
                                     );
                                     let e = io::Error::new(io::ErrorKind::InvalidInput, info);
@@ -1142,8 +1177,7 @@ fn read_multiple_form_body<'a>(
                                     Ok(size) => {
                                         if size == 0 {
                                             let info = format!(
-                                                "file:{}, line: {}, lost connection",
-                                                file!(),
+                                                "http_parser.rs line: {}, lost connection",
                                                 line!()
                                             );
                                             let e =
@@ -1216,8 +1250,7 @@ fn read_multiple_form_body<'a>(
                                     Ok(size) => {
                                         if size == 0 {
                                             let info = format!(
-                                                "file:{}, line: {}, lost connection",
-                                                file!(),
+                                                "http_parser.rs line: {}, lost connection",
                                                 line!()
                                             );
                                             let e =
@@ -1269,8 +1302,7 @@ fn read_multiple_form_body<'a>(
                                         Ok(size) => {
                                             if size == 0 {
                                                 let info = format!(
-                                                    "file:{}, line: {}, lost connection",
-                                                    file!(),
+                                                    "http_parser.rs line: {}, lost connection",
                                                     line!()
                                                 );
                                                 let e = io::Error::new(
@@ -1337,7 +1369,7 @@ fn read_multiple_form_body<'a>(
                                                     //继续读一部分内容以进行拼凑比较
                                                     Ok(size) => {
                                                         if size == 0 {
-                                                            let info = format!("file:{}, line: {}, lost connection",file!(),line!());
+                                                            let info = format!("http_parser.rs line: {}, lost connection",line!());
                                                             let e = io::Error::new(
                                                                 io::ErrorKind::InvalidInput,
                                                                 info,
@@ -1408,8 +1440,7 @@ fn read_multiple_form_body<'a>(
                                             Ok(size) => {
                                                 if size == 0 {
                                                     let info = format!(
-                                                        "file:{}, line: {}, lost connection",
-                                                        file!(),
+                                                        "http_parser.rs line: {}, lost connection",
                                                         line!()
                                                     );
                                                     let e = io::Error::new(
