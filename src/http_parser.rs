@@ -1440,6 +1440,8 @@ fn read_multiple_form_body<'a>(
                                                                 line!(),
                                                                 e.to_string()
                                                             );
+                                                            drop(file_handle);
+                                                            let _ = std::fs::remove_file(file_path);
                                                             return Err(io::Error::new(
                                                                 e.kind(),
                                                                 msg,
@@ -1461,6 +1463,8 @@ fn read_multiple_form_body<'a>(
                                                                 line!(),
                                                                 e.to_string()
                                                             );
+                                                            drop(file_handle);
+                                                            let _ = std::fs::remove_file(file_path);
                                                             return Err(io::Error::new(
                                                                 e.kind(),
                                                                 msg,
@@ -1515,6 +1519,10 @@ fn read_multiple_form_body<'a>(
                                                                         line!(),
                                                                         e.to_string()
                                                                     );
+                                                                    drop(file_handle);
+                                                                    let _ = std::fs::remove_file(
+                                                                        file_path,
+                                                                    );
                                                                     return Err(io::Error::new(
                                                                         e.kind(),
                                                                         msg,
@@ -1539,6 +1547,10 @@ fn read_multiple_form_body<'a>(
                                                                         "http_parser.rs line: {}, {}",
                                                                         line!(),
                                                                         e.to_string()
+                                                                    );
+                                                                    drop(file_handle);
+                                                                    let _ = std::fs::remove_file(
+                                                                        file_path,
                                                                     );
                                                                     return Err(io::Error::new(
                                                                         e.kind(),
@@ -1577,6 +1589,8 @@ fn read_multiple_form_body<'a>(
                                                         line!(),
                                                         e.to_string()
                                                     );
+                                                    drop(file_handle);
+                                                    let _ = std::fs::remove_file(file_path);
                                                     return Err(io::Error::new(e.kind(), msg));
                                                 }
                                             };
@@ -1595,6 +1609,8 @@ fn read_multiple_form_body<'a>(
                                                     line!(),
                                                     e.to_string()
                                                 );
+                                                drop(file_handle);
+                                                let _ = std::fs::remove_file(file_path);
                                                 return Err(io::Error::new(e.kind(), msg));
                                             }
                                         };
