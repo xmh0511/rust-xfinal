@@ -384,9 +384,9 @@ fn write_once(stream: &mut TcpStream, response: &mut Response) -> io::Result<()>
             }
             let slice = lazy_buffs.get_slice_from_range(start..end)?; //&mut lazy_buffs[start..end];
             stream.write(slice)?;
+			stream.flush()?;
             start = end;
         }
-        stream.flush()?;
         Ok(())
     }
 }
