@@ -154,9 +154,10 @@ fn construct_http_event(
                 if server_config.open_log {
                     let now = get_current_date();
                     println!(
-                        "[{}] >>> line: {}, error in write_once: {}",
+                        "[{}] >>> line: {}, error in write_once, type: {}, {}",
                         now,
                         line!(),
+						e.kind().to_string(),
                         ToString::to_string(&e)
                     );
                 }
@@ -173,9 +174,10 @@ fn construct_http_event(
                 if server_config.open_log {
                     let now = get_current_date();
                     println!(
-                        "[{}] >>> line: {}, error in write_chunk: {}",
+                        "[{}] >>> line: {}, error in write_chunk, type: {}, {}",
                         now,
                         line!(),
+						e.kind().to_string(),
                         ToString::to_string(&e)
                     );
                 }
