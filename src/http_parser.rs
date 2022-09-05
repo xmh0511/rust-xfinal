@@ -154,10 +154,10 @@ fn construct_http_event(
                 if server_config.open_log {
                     let now = get_current_date();
                     println!(
-                        "[{}] >>> line: {}, error in write_once, type: {}, {}",
+                        "[{}] >>> error in write_once in http_parser.rs; type: [{}], line: [{}], msg: [{}]",
                         now,
-                        line!(),
 						e.kind().to_string(),
+                        line!(),
                         ToString::to_string(&e)
                     );
                 }
@@ -174,10 +174,10 @@ fn construct_http_event(
                 if server_config.open_log {
                     let now = get_current_date();
                     println!(
-                        "[{}] >>> line: {}, error in write_chunk, type: {}, {}",
+                        "[{}] >>> error in write_chunk in http_parser.rs; type: [{}], line: [{}], msg: [{}]",
                         now,
-                        line!(),
 						e.kind().to_string(),
+                        line!(),
                         ToString::to_string(&e)
                     );
                 }
@@ -225,7 +225,6 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
     'Back: loop {
         let read_result = read_http_head(&mut stream, &conn_data.server_config);
         if let Ok((mut head_content, possible_body)) = read_result {
-            //println!("{}",head_content);
             let head_result = parse_header(&mut head_content);
             // let response = "hello";
             // let s = format!(
@@ -258,7 +257,7 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                                     if conn_data.server_config.open_log {
                                         let now = get_current_date();
                                         println!(
-                                            "[{}] >>> line: {}, the non-multipart-form body is too large",
+                                            "[{}] >>> error in handle_incoming in http_parser.rs; type: [body too large], line: [{}], msg: [the non-multipart-form body is too large]",
                                             now,
 											line!()
                                         );
@@ -300,7 +299,7 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                                     if conn_data.server_config.open_log {
                                         let now = get_current_date();
                                         println!(
-                                            "[{}] >>> line: {},  the non-multipart-form body is too large",
+                                            "[{}] >>> error in handle_incoming in http_parser.rs; type: [body too large], line: [{}],  msg: [the non-multipart-form body is too large]",
                                             now,
 											line!()
                                         );
@@ -347,7 +346,7 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                             if conn_data.server_config.open_log {
                                 let now = get_current_date();
                                 println!(
-                                    "[{}] >>> line: {}, invalid http body content",
+                                    "[{}] >>> error in handle_incoming in http_parser.rs; type: [bad body], line: [{}], msg: [invalid http body content]",
                                     now,
                                     line!()
                                 );
@@ -361,8 +360,10 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                     if conn_data.server_config.open_log {
                         let now = get_current_date();
                         println!(
-                            "[{}] >>> error in parse_header: {}",
+                            "[{}] >>> error in parse_header in http_parser.rs; type:[{}], line: [{}], msg: [{}]",
                             now,
+                            e.kind().to_string(),
+                            line!(),
                             ToString::to_string(&e)
                         );
                     }
@@ -374,9 +375,10 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
             if conn_data.server_config.open_log {
                 let now = get_current_date();
                 println!(
-                    "[{}] >>> error in reading http header, type: {}, {}",
+                    "[{}] >>> error in reading http header in http_parser.rs; type: [{}], line: [{}], msg: [{}]",
                     now,
-					e.kind().to_string(),
+                    e.kind().to_string(),
+                    line!(),
                     e.to_string()
                 );
             }
@@ -795,8 +797,9 @@ fn read_body_according_to_type<'a>(
                                 if server_config.open_log {
                                     let now = get_current_date();
                                     println!(
-                                        "[{}] >>> line: {}, {}",
+                                        "[{}] >>> error in read_body_according_to_type in http_parser.rs; type: [{}], line: [{}], msg: [{}]",
                                         now,
+                                        e.kind().to_string(),
                                         line!(),
                                         ToString::to_string(&e)
                                     );
@@ -819,7 +822,7 @@ fn read_body_according_to_type<'a>(
                         Err(e) => {
                             if server_config.open_log {
                                 let now = get_current_date();
-                                println!("[{}] >>> {}", now, ToString::to_string(&e));
+                                println!("[{}] >>> error in read_multiple_form_body in http_parser.rs; type: [{}], {}", now, e.kind().to_string(), ToString::to_string(&e));
                             }
                             return BodyContent::Bad;
                         }
@@ -915,10 +918,8 @@ fn is_file(slice: &[u8]) -> bool {
 }
 
 fn parse_file_content_type(slice: &[u8]) -> (&str, &str) {
-    //println!("571 {}",std::str::from_utf8(slice).unwrap());
     let end = slice.len() - 4;
     let s = std::str::from_utf8(&slice[..end]).unwrap_or_else(|_| "");
-    //println!("572 {s}");
     match s.split_once(":") {
         Some((k, v)) => {
             return (k, v.trim());
@@ -935,7 +936,6 @@ fn get_file_extension(s: &str) -> &str {
 }
 
 fn get_config_from_disposition(s: &str, is_file: bool) -> (Option<String>, Option<String>) {
-    //println!("file disposition: {}", s);
     let name = "name=\"";
     let r = match s.find(name) {
         Some(pos) => {
@@ -1031,7 +1031,7 @@ fn contains_substr(
                     }
                 }
                 Err(e) => {
-                    let msg = format!("http_parser.rs line: {}, {}", line_number, e.to_string());
+                    let msg = format!("line: [{}], msg: [{}]", line_number, e.to_string());
                     return io::Result::Err(io::Error::new(e.kind(), msg));
                 }
             }
@@ -1096,7 +1096,7 @@ fn read_multiple_form_body<'a>(
                             }
                             Err(e) => {
                                 let msg =
-                                    format!("http_parser.rs line: {}, {}", line!(), e.to_string());
+                                    format!("line: [{}], msg: [{}]", line!(), e.to_string());
                                 return Err(io::Error::new(e.kind(), msg));
                             }
                         }
@@ -1113,7 +1113,7 @@ fn read_multiple_form_body<'a>(
                     state = 1;
                     continue 'Outer;
                 } else {
-                    let msg = format!("http_parser.rs line: {}, bad body", line!());
+                    let msg = format!("line: [{}], msg: [bad body]", line!());
                     return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                 }
             }
@@ -1144,7 +1144,7 @@ fn read_multiple_form_body<'a>(
                             Ok(size) => {
                                 if size == 0 {
                                     let info = format!(
-                                        "http_parser.rs line: {}, lost connection",
+                                        "line: [{}], msg: [lost connection]",
                                         line!()
                                     );
                                     let e = io::Error::new(io::ErrorKind::InvalidInput, info);
@@ -1155,7 +1155,7 @@ fn read_multiple_form_body<'a>(
                             }
                             Err(e) => {
                                 let msg =
-                                    format!("http_parser.rs line: {}, {}", line!(), e.to_string());
+                                    format!("line: [{}], msg: [{}]", line!(), e.to_string());
                                 return Err(io::Error::new(e.kind(), msg));
                             }
                         };
@@ -1203,7 +1203,7 @@ fn read_multiple_form_body<'a>(
                                     Ok(size) => {
                                         if size == 0 {
                                             let info = format!(
-                                                "http_parser.rs line: {}, lost connection",
+                                                "line: [{}], msg: [lost connection]",
                                                 line!()
                                             );
                                             let e =
@@ -1216,7 +1216,7 @@ fn read_multiple_form_body<'a>(
                                     }
                                     Err(e) => {
                                         let msg = format!(
-                                            "http_parser.rs line: {}, {}",
+                                            "line: [{}], msg: [{}]",
                                             line!(),
                                             e.to_string()
                                         );
@@ -1244,7 +1244,7 @@ fn read_multiple_form_body<'a>(
                                 Ok(x) => x,
                                 Err(e) => {
                                     let msg = format!(
-                                        "http_parser.rs line: {}, {}",
+                                        "line: [{}], msg: [{}]",
                                         line!(),
                                         e.to_string()
                                     );
@@ -1257,7 +1257,7 @@ fn read_multiple_form_body<'a>(
                             Some(x) => x,
                             None => {
                                 let msg = format!(
-                                    "http_parser.rs line: {}, cannot get indice name from requested body",
+                                    "line: [{}], msg: [cannot get indice name from requested body]",
                                     line!()
                                 );
                                 return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
@@ -1267,7 +1267,7 @@ fn read_multiple_form_body<'a>(
                             Some(x) => x,
                             None => {
                                 let msg = format!(
-                                    "http_parser.rs line: {}, cannot get file indice from requested body",
+                                    "line: [{}], msg: [cannot get file indice from requested body]",
                                     line!()
                                 );
                                 return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
@@ -1313,7 +1313,7 @@ fn read_multiple_form_body<'a>(
                                     Ok(size) => {
                                         if size == 0 {
                                             let info = format!(
-                                                "http_parser.rs line: {}, lost connection",
+                                                "line: [{}], msg: [lost connection]",
                                                 line!()
                                             );
                                             let e =
@@ -1326,7 +1326,7 @@ fn read_multiple_form_body<'a>(
                                     }
                                     Err(e) => {
                                         let info = format!(
-                                            "http_parser.rs line: {}, {}",
+                                            "line: [{}], msg: [{}]",
                                             line!(),
                                             e.to_string()
                                         );
@@ -1354,7 +1354,7 @@ fn read_multiple_form_body<'a>(
                                 Ok(file) => file,
                                 Err(e) => {
                                     let msg = format!(
-                                        "http_parser.rs line: {}, {}",
+                                        "line: [{}], msg: [{}]",
                                         line!(),
                                         e.to_string()
                                     );
@@ -1378,7 +1378,7 @@ fn read_multiple_form_body<'a>(
                                         Ok(_) => {}
                                         Err(e) => {
                                             let msg = format!(
-                                                "http_parser.rs line: {}, {}",
+                                                "line: [{}], msg: [{}]",
                                                 line!(),
                                                 e.to_string()
                                             );
@@ -1391,7 +1391,7 @@ fn read_multiple_form_body<'a>(
                                         Ok(size) => {
                                             if size == 0 {
                                                 let info = format!(
-                                                    "http_parser.rs line: {}, lost connection",
+                                                    "line: [{}], msg: [lost connection]",
                                                     line!()
                                                 );
                                                 let e = io::Error::new(
@@ -1411,7 +1411,7 @@ fn read_multiple_form_body<'a>(
                                             drop(file_handle);
                                             let _ = std::fs::remove_file(file_path);
                                             let msg = format!(
-                                                "http_parser.rs line: {}, {}",
+                                                "line: [{}], msg: [{}]",
                                                 line!(),
                                                 e.to_string()
                                             );
@@ -1439,7 +1439,7 @@ fn read_multiple_form_body<'a>(
                                                         Ok(_) => {}
                                                         Err(e) => {
                                                             let msg = format!(
-                                                                "http_parser.rs line: {}, {}",
+                                                                "line: [{}], msg: [{}]",
                                                                 line!(),
                                                                 e.to_string()
                                                             );
@@ -1462,7 +1462,7 @@ fn read_multiple_form_body<'a>(
                                                         Ok(_) => {}
                                                         Err(e) => {
                                                             let msg = format!(
-                                                                "http_parser.rs line: {}, {}",
+                                                                "line: [{}], msg: [{}]",
                                                                 line!(),
                                                                 e.to_string()
                                                             );
@@ -1493,7 +1493,7 @@ fn read_multiple_form_body<'a>(
                                                     //继续读一部分内容以进行拼凑比较
                                                     Ok(size) => {
                                                         if size == 0 {
-                                                            let info = format!("http_parser.rs line: {}, lost connection",line!());
+                                                            let info = format!("line: [{}], msg: [lost connection]",line!());
                                                             let e = io::Error::new(
                                                                 io::ErrorKind::InvalidInput,
                                                                 info,
@@ -1518,7 +1518,7 @@ fn read_multiple_form_body<'a>(
                                                                 Ok(_) => {}
                                                                 Err(e) => {
                                                                     let msg = format!(
-                                                                        "http_parser.rs line: {}, {}",
+                                                                        "line: [{}], msg: [{}]",
                                                                         line!(),
                                                                         e.to_string()
                                                                     );
@@ -1547,7 +1547,7 @@ fn read_multiple_form_body<'a>(
                                                                 Ok(_) => {}
                                                                 Err(e) => {
                                                                     let msg = format!(
-                                                                        "http_parser.rs line: {}, {}",
+                                                                        "line: [{}], msg: [{}]",
                                                                         line!(),
                                                                         e.to_string()
                                                                     );
@@ -1574,7 +1574,7 @@ fn read_multiple_form_body<'a>(
                                                         drop(file_handle);
                                                         let _ = std::fs::remove_file(file_path);
                                                         let msg = format!(
-                                                            "http_parser.rs line: {}, {}",
+                                                            "line: [{}], msg: [{}]",
                                                             line!(),
                                                             e.to_string()
                                                         );
@@ -1588,7 +1588,7 @@ fn read_multiple_form_body<'a>(
                                                 Ok(_) => {}
                                                 Err(e) => {
                                                     let msg = format!(
-                                                        "http_parser.rs line: {}, {}",
+                                                        "line: [{}], msg: [{}]",
                                                         line!(),
                                                         e.to_string()
                                                     );
@@ -1608,7 +1608,7 @@ fn read_multiple_form_body<'a>(
                                             Ok(_) => {}
                                             Err(e) => {
                                                 let msg = format!(
-                                                    "http_parser.rs line: {}, {}",
+                                                    "line: [{}], msg: [{}]",
                                                     line!(),
                                                     e.to_string()
                                                 );
@@ -1620,13 +1620,13 @@ fn read_multiple_form_body<'a>(
                                         //buffs.clear();
                                         buffs.resize(server_config.read_buff_increase_size, b'\0');
                                         buffs[0] = b'\r';
-                                        //println!("{},{}",buffs.len(),pos);
+
                                         //let mut temp_buff = [b'\0'; 1024];
                                         match stream.read(&mut buffs[1..]) {
                                             Ok(size) => {
                                                 if size == 0 {
                                                     let info = format!(
-                                                        "http_parser.rs line: {}, lost connection",
+                                                        "line: [{}], msg: [lost connection]",
                                                         line!()
                                                     );
                                                     let e = io::Error::new(
@@ -1649,7 +1649,7 @@ fn read_multiple_form_body<'a>(
                                                 drop(file_handle);
                                                 let _ = std::fs::remove_file(file_path);
                                                 let msg = format!(
-                                                    "http_parser.rs line: {}, {}",
+                                                    "line: [{}], msg: [{}]",
                                                     line!(),
                                                     e.to_string()
                                                 );
@@ -1671,7 +1671,7 @@ fn read_multiple_form_body<'a>(
         match stream.read(&mut buff) {
             Ok(_) => {}
             Err(e) => {
-                let msg = format!("http_parser.rs line: {}, {}", line!(), e.to_string());
+                let msg = format!("line: [{}], msg: [{}]", line!(), e.to_string());
                 return Err(io::Error::new(e.kind(), msg));
             }
         }
@@ -1698,7 +1698,7 @@ fn read_multiple_form_body<'a>(
                             let indice_name = match name.0 {
                                 Some(x) => x,
                                 None => {
-                                    let msg = format!("http_parser.rs line: {}, cannot get indice name from requested body", line!());
+                                    let msg = format!("line: [{}], msg: [cannot get indice name from requested body]", line!());
                                     return io::Result::Err(io::Error::new(
                                         io::ErrorKind::InvalidData,
                                         msg,
@@ -1711,7 +1711,7 @@ fn read_multiple_form_body<'a>(
                             //处理文本时, 包含了分隔符的\r\n，在这里去除
                         }
                         None => {
-                            let msg = format!("http_parser.rs line: {}, bad body with unknown format multipart form",line!());
+                            let msg = format!("line: [{}], msg: [bad body with unknown format multipart form]",line!());
                             let e = io::Error::new(ErrorKind::InvalidData, msg);
                             return io::Result::Err(e);
                         }
@@ -1721,7 +1721,7 @@ fn read_multiple_form_body<'a>(
             }
             Err(_) => {
                 let msg = format!(
-                    "http_parser.rs line: {}, bad body with invalid utf8",
+                    "line: [{}], msg: [bad body with invalid utf8]",
                     line!()
                 );
                 let e = io::Error::new(ErrorKind::InvalidData, msg);
@@ -1730,7 +1730,7 @@ fn read_multiple_form_body<'a>(
         },
         Err(_) => {
             let msg = format!(
-                "http_parser.rs line: {}, bad body with invalid utf8",
+                "line: [{}], msg: [bad body with invalid utf8]",
                 line!()
             );
             let e = io::Error::new(ErrorKind::InvalidData, msg);
