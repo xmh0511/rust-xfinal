@@ -195,7 +195,7 @@ fn is_keep_alive(head_map: &HashMap<&str, &str>) -> bool {
     });
     match i {
         Some(&k) => {
-            let &v = head_map.get(k).unwrap();
+            let &v = head_map.get(k).unwrap(); // guaranteed by above
             if v.to_lowercase() == "keep-alive" {
                 true
             } else {
@@ -642,11 +642,11 @@ fn do_router(router: &RouterMap, req: &Request, res: &mut Response) {
             });
             match r {
                 Some(k) => {
-                    let wild_router = router.get(k).unwrap();
+                    let wild_router = router.get(k).unwrap(); // guaranteed by above
                     invoke_router(wild_router, req, res);
                 }
                 None => {
-                    let not_found = router.get("NEVER_FOUND_FOR_ALL").unwrap();
+                    let not_found = router.get("NEVER_FOUND_FOR_ALL").unwrap(); // guaranteed
                     not_found.1.call(req, res);
                 }
             }
@@ -680,8 +680,8 @@ fn read_body<'a, 'b, 'c>(
         });
         match body_type_key {
             Some(&body_type_key) => {
-                let &body_type = head_map.get(body_type_key).unwrap();
-                // the body content from when reading head
+                let &body_type = head_map.get(body_type_key).unwrap(); // guaranteed by above
+                                                                       // the body content from when reading head
                 let has_read_len = body.len();
                 if len > has_read_len {
                     // need to read out the remainder body content
@@ -816,12 +816,7 @@ fn read_body_according_to_type<'a>(
                         Err(e) => {
                             if server_config.open_log {
                                 let now = get_current_date();
-                                println!(
-                                    "[{}] >>> line: {}, {}",
-                                    now,
-                                    line!(),
-                                    ToString::to_string(&e)
-                                );
+                                println!("[{}] >>> {}", now, ToString::to_string(&e));
                             }
                             return BodyContent::Bad;
                         }
@@ -936,7 +931,7 @@ fn get_file_extension(s: &str) -> &str {
     }
 }
 
-fn get_config_from_disposition(s: &str, is_file: bool) -> (String, Option<String>) {
+fn get_config_from_disposition(s: &str, is_file: bool) -> (Option<String>, Option<String>) {
     //println!("file disposition: {}", s);
     let name = "name=\"";
     let r = match s.find(name) {
@@ -944,27 +939,32 @@ fn get_config_from_disposition(s: &str, is_file: bool) -> (String, Option<String
             let pos = pos + name.len();
             let name_end = "\"";
             match s[pos..].find(name_end) {
-                Some(pos_end) => (String::from(&s[pos..pos + pos_end]), pos_end),
-                None => todo!(),
+                Some(pos_end) => (Some(String::from(&s[pos..pos + pos_end])), pos_end),
+                None => (None, 0),
             }
         }
-        None => todo!(),
+        None => (None, 0),
     };
     if is_file {
         let file_name_key = "filename=\"";
         let bias = r.1 + 2;
-        let filename = match s[bias..].find(file_name_key) {
+        match s[bias..].find(file_name_key) {
             Some(pos) => {
                 let pos = bias + pos + file_name_key.len();
                 let end = "\"";
                 match s[pos..].find(end) {
-                    Some(end) => String::from(&s[pos..pos + end]),
-                    None => todo!(),
+                    Some(end) => {
+                        return (r.0, Some(String::from(&s[pos..pos + end])));
+                    }
+                    None => {
+                        return (r.0, None);
+                    }
                 }
             }
-            None => todo!(),
+            None => {
+                return (r.0, None);
+            }
         };
-        return (r.0, Some(filename));
     }
     return (r.0, None);
 }
@@ -975,6 +975,7 @@ fn contains_substr(
     body_slice: &mut Vec<u8>,
     pat: &[u8],
     start: usize,
+    line_number: u32,
 ) -> io::Result<FindSet> {
     let slice_len = body_slice.len();
     let pat_len = pat.len();
@@ -1026,7 +1027,10 @@ fn contains_substr(
                         });
                     }
                 }
-                Err(e) => return io::Result::Err(e),
+                Err(e) => {
+                    let msg = format!("http_parser.rs line: {}, {}", line_number, e.to_string());
+                    return io::Result::Err(io::Error::new(e.kind(), msg));
+                }
             }
         }
     }
@@ -1068,7 +1072,14 @@ fn read_multiple_form_body<'a>(
             0 => {
                 // 找boundary
                 // 当前状态，buffs的内容总是以--Boundary??开头
-                let r = contains_substr(stream, &mut need_size, &mut buffs, boundary_sequence, 0)?; // 确保找到boundary_sequence
+                let r = contains_substr(
+                    stream,
+                    &mut need_size,
+                    &mut buffs,
+                    boundary_sequence,
+                    0,
+                    line!(),
+                )?; // 确保找到boundary_sequence
 
                 if r.find_pos != -1 {
                     let mut subsequent = Vec::new();
@@ -1081,7 +1092,9 @@ fn read_multiple_form_body<'a>(
                                 buffs.extend_from_slice(&buff_two);
                             }
                             Err(e) => {
-                                return io::Result::Err(e);
+                                let msg =
+                                    format!("http_parser.rs line: {}, {}", line!(), e.to_string());
+                                return Err(io::Error::new(e.kind(), msg));
                             }
                         }
                     }
@@ -1097,8 +1110,8 @@ fn read_multiple_form_body<'a>(
                     state = 1;
                     continue 'Outer;
                 } else {
-                    let e = io::Error::new(ErrorKind::InvalidData, "bad body");
-                    return io::Result::Err(e);
+                    let msg = format!("http_parser.rs line: {}, bad body", line!());
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                 }
             }
             1 => {
@@ -1109,7 +1122,14 @@ fn read_multiple_form_body<'a>(
                     end_pos: 0,
                 };
                 while r.find_pos == -1 {
-                    r = contains_substr(stream, &mut need_size, &mut buffs, crlf_sequence, 0)?; // 通过找\r\n
+                    r = contains_substr(
+                        stream,
+                        &mut need_size,
+                        &mut buffs,
+                        crlf_sequence,
+                        0,
+                        line!(),
+                    )?; // 通过找\r\n
                     if r.find_pos == -1 {
                         //let mut buff = [b'\0'; 256];
                         let start_read_pos = buffs.len();
@@ -1131,7 +1151,9 @@ fn read_multiple_form_body<'a>(
                                 buffs.resize(start_read_pos + size, b'\0');
                             }
                             Err(e) => {
-                                return io::Result::Err(e);
+                                let msg =
+                                    format!("http_parser.rs line: {}, {}", line!(), e.to_string());
+                                return Err(io::Error::new(e.kind(), msg));
                             }
                         };
                     }
@@ -1165,6 +1187,7 @@ fn read_multiple_form_body<'a>(
                                 &mut buffs,
                                 boundary_sequence,
                                 0,
+                                line!(),
                             )?;
                             if find_boundary.find_pos == -1 {
                                 //let mut buff = [b'\0'; 256];
@@ -1189,7 +1212,12 @@ fn read_multiple_form_body<'a>(
                                         need_size -= size;
                                     }
                                     Err(e) => {
-                                        return io::Result::Err(e);
+                                        let msg = format!(
+                                            "http_parser.rs line: {}, {}",
+                                            line!(),
+                                            e.to_string()
+                                        );
+                                        return Err(io::Error::new(e.kind(), msg));
                                     }
                                 };
                             }
@@ -1208,9 +1236,40 @@ fn read_multiple_form_body<'a>(
                         }
                     } else {
                         //文件
-                        let s = std::str::from_utf8(content_disposition).unwrap();
+                        let s = {
+                            match std::str::from_utf8(content_disposition) {
+                                Ok(x) => x,
+                                Err(e) => {
+                                    let msg = format!(
+                                        "http_parser.rs line: {}, {}",
+                                        line!(),
+                                        e.to_string()
+                                    );
+                                    return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                                }
+                            }
+                        };
                         let config = get_config_from_disposition(s, true);
-                        let filename = config.1.unwrap();
+                        let indice_name = match config.0 {
+                            Some(x) => x,
+                            None => {
+                                let msg = format!(
+                                    "http_parser.rs line: {}, cannot get indice name from requested body",
+                                    line!()
+                                );
+                                return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                            }
+                        };
+                        let filename = match config.1 {
+                            Some(x) => x,
+                            None => {
+                                let msg = format!(
+                                    "http_parser.rs line: {}, cannot get file indice from requested body",
+                                    line!()
+                                );
+                                return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                            }
+                        };
                         let uid = uuid::Uuid::new_v4().to_string();
                         let extension = get_file_extension(&filename);
                         let filepath =
@@ -1219,7 +1278,7 @@ fn read_multiple_form_body<'a>(
                             filename: filename,
                             filepath: filepath,
                             content_type: String::new(),
-                            form_indice: config.0,
+                            form_indice: indice_name,
                         };
 
                         let mut subsequent = Vec::new();
@@ -1238,6 +1297,7 @@ fn read_multiple_form_body<'a>(
                                 &mut buffs,
                                 double_crlf,
                                 0,
+                                line!(),
                             )?;
                             if find_double_crlf.find_pos == -1 {
                                 //let mut buff = [b'\0'; 256];
@@ -1262,6 +1322,12 @@ fn read_multiple_form_body<'a>(
                                         need_size -= size;
                                     }
                                     Err(e) => {
+                                        let info = format!(
+                                            "http_parser.rs line: {}, {}",
+                                            line!(),
+                                            e.to_string()
+                                        );
+                                        let e = io::Error::new(e.kind(), info);
                                         return io::Result::Err(e);
                                     }
                                 };
@@ -1277,11 +1343,21 @@ fn read_multiple_form_body<'a>(
                             subsequent.extend_from_slice(&buffs[find_double_crlf.end_pos..]); // 移除content-type:...\r\n\r\n
                             buffs = subsequent;
 
-                            let mut file_handle = OpenOptions::new()
+                            let mut file_handle = match OpenOptions::new()
                                 .write(true)
                                 .create(true)
                                 .open(file.filepath.clone())
-                                .unwrap();
+                            {
+                                Ok(file) => file,
+                                Err(e) => {
+                                    let msg = format!(
+                                        "http_parser.rs line: {}, {}",
+                                        line!(),
+                                        e.to_string()
+                                    );
+                                    return Err(io::Error::new(e.kind(), msg));
+                                }
+                            };
 
                             let file_path = file.filepath.clone();
                             multiple_data_collection
@@ -1295,7 +1371,17 @@ fn read_multiple_form_body<'a>(
                                 //以\r为关键字判断是否是文件内容的一部分还是分隔符的一部分
                                 if find_cr.find_pos == -1 {
                                     //如果整个字节串里没有\r, 那么一定都是文件内容
-                                    file_handle.write(&buffs).unwrap();
+                                    match file_handle.write(&buffs) {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            let msg = format!(
+                                                "http_parser.rs line: {}, {}",
+                                                line!(),
+                                                e.to_string()
+                                            );
+                                            return Err(io::Error::new(e.kind(), msg));
+                                        }
+                                    };
                                     //buffs.clear();
                                     buffs.resize(server_config.read_buff_increase_size, b'\0');
                                     match stream.read(&mut buffs[0..]) {
@@ -1321,7 +1407,12 @@ fn read_multiple_form_body<'a>(
                                         Err(e) => {
                                             drop(file_handle);
                                             let _ = std::fs::remove_file(file_path);
-                                            return io::Result::Err(e);
+                                            let msg = format!(
+                                                "http_parser.rs line: {}, {}",
+                                                line!(),
+                                                e.to_string()
+                                            );
+                                            return Err(io::Error::new(e.kind(), msg));
                                         }
                                     }
                                 } else {
@@ -1341,7 +1432,20 @@ fn read_multiple_form_body<'a>(
                                                 );
                                                 if find_test.find_pos != -1 {
                                                     //如果\r\n是分隔符
-                                                    file_handle.write(&buffs[0..pos]).unwrap();
+                                                    match file_handle.write(&buffs[0..pos]) {
+                                                        Ok(_) => {}
+                                                        Err(e) => {
+                                                            let msg = format!(
+                                                                "http_parser.rs line: {}, {}",
+                                                                line!(),
+                                                                e.to_string()
+                                                            );
+                                                            return Err(io::Error::new(
+                                                                e.kind(),
+                                                                msg,
+                                                            ));
+                                                        }
+                                                    };
                                                     state = 0;
                                                     let mut temp = Vec::new();
                                                     temp.extend_from_slice(&buffs[pos + 2..]); //找\r\n--Boundary, 跳过\r\n
@@ -1349,7 +1453,20 @@ fn read_multiple_form_body<'a>(
                                                     continue 'Outer;
                                                 } else {
                                                     //\r\n不是形成分隔符的关键字，那么他们就是文件内容的一部分
-                                                    file_handle.write(&buffs[0..=pos + 1]).unwrap();
+                                                    match file_handle.write(&buffs[0..=pos + 1]) {
+                                                        Ok(_) => {}
+                                                        Err(e) => {
+                                                            let msg = format!(
+                                                                "http_parser.rs line: {}, {}",
+                                                                line!(),
+                                                                e.to_string()
+                                                            );
+                                                            return Err(io::Error::new(
+                                                                e.kind(),
+                                                                msg,
+                                                            ));
+                                                        }
+                                                    };
                                                     let mut temp = Vec::new();
                                                     temp.extend_from_slice(&buffs[pos + 2..]);
                                                     buffs = temp;
@@ -1389,9 +1506,21 @@ fn read_multiple_form_body<'a>(
                                                         if r.find_pos != -1 {
                                                             //拼凑后\r\n形成了分隔符
                                                             let pos = r.find_pos as usize;
-                                                            file_handle
-                                                                .write(&buffs[0..pos])
-                                                                .unwrap();
+                                                            match file_handle.write(&buffs[0..pos])
+                                                            {
+                                                                Ok(_) => {}
+                                                                Err(e) => {
+                                                                    let msg = format!(
+                                                                        "http_parser.rs line: {}, {}",
+                                                                        line!(),
+                                                                        e.to_string()
+                                                                    );
+                                                                    return Err(io::Error::new(
+                                                                        e.kind(),
+                                                                        msg,
+                                                                    ));
+                                                                }
+                                                            };
                                                             state = 0;
                                                             let mut temp = Vec::new();
                                                             temp.extend_from_slice(
@@ -1401,9 +1530,22 @@ fn read_multiple_form_body<'a>(
                                                             continue 'Outer;
                                                         } else {
                                                             //拼凑后发现\r\n不是形成分隔符的关键字，那么\r\n就是文件内容的一部分
-                                                            file_handle
+                                                            match file_handle
                                                                 .write(&buffs[0..=pos + 1])
-                                                                .unwrap();
+                                                            {
+                                                                Ok(_) => {}
+                                                                Err(e) => {
+                                                                    let msg = format!(
+                                                                        "http_parser.rs line: {}, {}",
+                                                                        line!(),
+                                                                        e.to_string()
+                                                                    );
+                                                                    return Err(io::Error::new(
+                                                                        e.kind(),
+                                                                        msg,
+                                                                    ));
+                                                                }
+                                                            };
                                                             let mut temp = Vec::new();
                                                             //\r\n是文件内容，所以从\n后面开始
                                                             temp.extend_from_slice(
@@ -1416,13 +1558,28 @@ fn read_multiple_form_body<'a>(
                                                     Err(e) => {
                                                         drop(file_handle);
                                                         let _ = std::fs::remove_file(file_path);
-                                                        return io::Result::Err(e);
+                                                        let msg = format!(
+                                                            "http_parser.rs line: {}, {}",
+                                                            line!(),
+                                                            e.to_string()
+                                                        );
+                                                        return Err(io::Error::new(e.kind(), msg));
                                                     }
                                                 }
                                             }
                                         } else {
                                             //\r的下一个字节不是\n, 那么可以肯定\r是文件的内容
-                                            file_handle.write(&buffs[0..=pos]).unwrap();
+                                            match file_handle.write(&buffs[0..=pos]) {
+                                                Ok(_) => {}
+                                                Err(e) => {
+                                                    let msg = format!(
+                                                        "http_parser.rs line: {}, {}",
+                                                        line!(),
+                                                        e.to_string()
+                                                    );
+                                                    return Err(io::Error::new(e.kind(), msg));
+                                                }
+                                            };
                                             let mut temp = Vec::new();
                                             temp.extend_from_slice(&buffs[pos + 1..]); //从\r的下一个字节开始
                                             buffs = temp;
@@ -1430,7 +1587,17 @@ fn read_multiple_form_body<'a>(
                                         }
                                     } else {
                                         // \r正好是buffs里面的最后一个字节，那么只能确定0~前一个字节是文件内容
-                                        file_handle.write(&buffs[0..pos]).unwrap();
+                                        match file_handle.write(&buffs[0..pos]) {
+                                            Ok(_) => {}
+                                            Err(e) => {
+                                                let msg = format!(
+                                                    "http_parser.rs line: {}, {}",
+                                                    line!(),
+                                                    e.to_string()
+                                                );
+                                                return Err(io::Error::new(e.kind(), msg));
+                                            }
+                                        };
                                         //buffs.clear();
                                         buffs.resize(server_config.read_buff_increase_size, b'\0');
                                         buffs[0] = b'\r';
@@ -1462,7 +1629,12 @@ fn read_multiple_form_body<'a>(
                                             Err(e) => {
                                                 drop(file_handle);
                                                 let _ = std::fs::remove_file(file_path);
-                                                return io::Result::Err(e);
+                                                let msg = format!(
+                                                    "http_parser.rs line: {}, {}",
+                                                    line!(),
+                                                    e.to_string()
+                                                );
+                                                return Err(io::Error::new(e.kind(), msg));
                                             }
                                         }
                                     }
@@ -1479,7 +1651,10 @@ fn read_multiple_form_body<'a>(
         let mut buff = [b'\0'; 10]; //充其量没有之前的循环中没有读 --end_boundary--?? ??两个字节
         match stream.read(&mut buff) {
             Ok(_) => {}
-            Err(e) => return io::Result::Err(e),
+            Err(e) => {
+                let msg = format!("http_parser.rs line: {}, {}", line!(), e.to_string());
+                return Err(io::Error::new(e.kind(), msg));
+            }
         }
     }
 
@@ -1501,16 +1676,24 @@ fn read_multiple_form_body<'a>(
                     match r {
                         Some(r) => {
                             let name = get_config_from_disposition(r.0, false);
+                            let indice_name = match name.0 {
+                                Some(x) => x,
+                                None => {
+                                    let msg = format!("http_parser.rs line: {}, cannot get indice name from requested body", line!());
+                                    return io::Result::Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        msg,
+                                    ));
+                                }
+                            };
                             let text_len = r.1.len();
                             multiple_data_collection
-                                .insert(name.0, MultipleFormData::Text(&r.1[0..text_len - 2]));
+                                .insert(indice_name, MultipleFormData::Text(&r.1[0..text_len - 2]));
                             //处理文本时, 包含了分隔符的\r\n，在这里去除
                         }
                         None => {
-                            let e = io::Error::new(
-                                ErrorKind::InvalidData,
-                                "bad body with unknown format multipart form",
-                            );
+                            let msg = format!("http_parser.rs line: {}, bad body with unknown format multipart form",line!());
+                            let e = io::Error::new(ErrorKind::InvalidData, msg);
                             return io::Result::Err(e);
                         }
                     }
@@ -1518,12 +1701,20 @@ fn read_multiple_form_body<'a>(
                 return io::Result::Ok(multiple_data_collection);
             }
             Err(_) => {
-                let e = io::Error::new(ErrorKind::InvalidData, "bad body with invalid utf8");
+                let msg = format!(
+                    "http_parser.rs line: {}, bad body with invalid utf8",
+                    line!()
+                );
+                let e = io::Error::new(ErrorKind::InvalidData, msg);
                 return io::Result::Err(e);
             }
         },
         Err(_) => {
-            let e = io::Error::new(ErrorKind::InvalidData, "bad body with invalid utf8");
+            let msg = format!(
+                "http_parser.rs line: {}, bad body with invalid utf8",
+                line!()
+            );
+            let e = io::Error::new(ErrorKind::InvalidData, msg);
             return io::Result::Err(e);
         }
     }
