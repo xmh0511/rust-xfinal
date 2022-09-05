@@ -154,7 +154,7 @@ fn construct_http_event(
         conn_: Rc::clone(&conn),
         range: ResponseRangeMeta::None,
         request_header: head_map,
-		charset:None
+        charset: None,
     };
 
     do_router(&router, &request, &mut response);
@@ -384,7 +384,7 @@ fn write_once(stream: &mut TcpStream, response: &mut Response) -> io::Result<()>
             }
             let slice = lazy_buffs.get_slice_from_range(start..end)?; //&mut lazy_buffs[start..end];
             stream.write(slice)?;
-			stream.flush()?;
+            stream.flush()?;
             start = end;
         }
         Ok(())
