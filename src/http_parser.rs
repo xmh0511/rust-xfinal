@@ -1095,8 +1095,7 @@ fn read_multiple_form_body<'a>(
                                 buffs.extend_from_slice(&buff_two);
                             }
                             Err(e) => {
-                                let msg =
-                                    format!("line: [{}], msg: [{}]", line!(), e.to_string());
+                                let msg = format!("line: [{}], msg: [{}]", line!(), e.to_string());
                                 return Err(io::Error::new(e.kind(), msg));
                             }
                         }
@@ -1143,10 +1142,8 @@ fn read_multiple_form_body<'a>(
                         match stream.read(&mut buffs[start_read_pos..]) {
                             Ok(size) => {
                                 if size == 0 {
-                                    let info = format!(
-                                        "line: [{}], msg: [lost connection]",
-                                        line!()
-                                    );
+                                    let info =
+                                        format!("line: [{}], msg: [lost connection]", line!());
                                     let e = io::Error::new(io::ErrorKind::InvalidInput, info);
                                     return io::Result::Err(e);
                                 }
@@ -1154,8 +1151,7 @@ fn read_multiple_form_body<'a>(
                                 buffs.resize(start_read_pos + size, b'\0');
                             }
                             Err(e) => {
-                                let msg =
-                                    format!("line: [{}], msg: [{}]", line!(), e.to_string());
+                                let msg = format!("line: [{}], msg: [{}]", line!(), e.to_string());
                                 return Err(io::Error::new(e.kind(), msg));
                             }
                         };
@@ -1243,11 +1239,8 @@ fn read_multiple_form_body<'a>(
                             match std::str::from_utf8(content_disposition) {
                                 Ok(x) => x,
                                 Err(e) => {
-                                    let msg = format!(
-                                        "line: [{}], msg: [{}]",
-                                        line!(),
-                                        e.to_string()
-                                    );
+                                    let msg =
+                                        format!("line: [{}], msg: [{}]", line!(), e.to_string());
                                     return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                                 }
                             }
@@ -1353,11 +1346,8 @@ fn read_multiple_form_body<'a>(
                             {
                                 Ok(file) => file,
                                 Err(e) => {
-                                    let msg = format!(
-                                        "line: [{}], msg: [{}]",
-                                        line!(),
-                                        e.to_string()
-                                    );
+                                    let msg =
+                                        format!("line: [{}], msg: [{}]", line!(), e.to_string());
                                     return Err(io::Error::new(e.kind(), msg));
                                 }
                             };
@@ -1711,7 +1701,10 @@ fn read_multiple_form_body<'a>(
                             //处理文本时, 包含了分隔符的\r\n，在这里去除
                         }
                         None => {
-                            let msg = format!("line: [{}], msg: [bad body with unknown format multipart form]",line!());
+                            let msg = format!(
+                                "line: [{}], msg: [bad body with unknown format multipart form]",
+                                line!()
+                            );
                             let e = io::Error::new(ErrorKind::InvalidData, msg);
                             return io::Result::Err(e);
                         }
@@ -1720,19 +1713,13 @@ fn read_multiple_form_body<'a>(
                 return io::Result::Ok(multiple_data_collection);
             }
             Err(_) => {
-                let msg = format!(
-                    "line: [{}], msg: [bad body with invalid utf8]",
-                    line!()
-                );
+                let msg = format!("line: [{}], msg: [bad body with invalid utf8]", line!());
                 let e = io::Error::new(ErrorKind::InvalidData, msg);
                 return io::Result::Err(e);
             }
         },
         Err(_) => {
-            let msg = format!(
-                "line: [{}], msg: [bad body with invalid utf8]",
-                line!()
-            );
+            let msg = format!("line: [{}], msg: [bad body with invalid utf8]", line!());
             let e = io::Error::new(ErrorKind::InvalidData, msg);
             return io::Result::Err(e);
         }

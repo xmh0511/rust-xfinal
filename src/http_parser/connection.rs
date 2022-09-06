@@ -221,7 +221,7 @@ impl<'a> Request<'a> {
             });
             match r {
                 Some(s) => {
-                    let v = x.get(s).unwrap();
+                    let v = x.get(s).unwrap(); // guarantee by above
                     match v {
                         MultipleFormData::Text(v) => {
                             return Some(*v);
@@ -444,8 +444,8 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
         if self.has_failure {
             return self;
         }
-		self.res
-		.add_header(String::from("Accept-Ranges"), String::from("bytes"));
+        self.res
+            .add_header(String::from("Accept-Ranges"), String::from("bytes"));
         if self.res.method == "HEAD" {
             match &self.res.body {
                 BodyType::Memory(_, buffs) => {
@@ -456,12 +456,22 @@ impl<'b, 'a> ResponseConfig<'b, 'a> {
                 BodyType::File(path, _) => {
                     match std::fs::OpenOptions::new().read(true).open(path) {
                         Ok(file) => {
-                            let file_size = file.metadata().unwrap().len();
-                            self.res
-                                .add_header(String::from("Content-length"), file_size.to_string());
-                            self.res.http_state = 200;
+                            match file.metadata() {
+                                Ok(meta) => {
+                                    self.res.add_header(
+                                        String::from("Content-length"),
+                                        meta.len().to_string(),
+                                    );
+                                    self.res.http_state = 200;
+                                }
+                                Err(_) => {
+                                    self.has_failure = true;
+                                    self.res.write_state(404);
+                                }
+                            };
                         }
                         Err(_) => {
+                            self.has_failure = true;
                             self.res.write_state(404);
                         }
                     }
@@ -681,17 +691,17 @@ impl<'a> Response<'a> {
                             Some(charset) => {
                                 self.add_header(
                                     "Content-type".to_string(),
-                                    format!("{}; charset={}",extension, charset),
+                                    format!("{}; charset={}", extension, charset),
                                 );
                             }
                             None => {
                                 self.add_header(
                                     "Content-type".to_string(),
-                                    format!("{}; charset=utf-8",extension),
+                                    format!("{}; charset=utf-8", extension),
                                 );
                             }
                         },
-                        MemoryType::Binary => {},
+                        MemoryType::Binary => {}
                     };
                 }
                 BodyType::File(_, extension) => {
@@ -764,7 +774,11 @@ impl<'a> Response<'a> {
                     }
                 } else {
                     if lack_beg {
-                        todo!()
+                        self.write_state(416);
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "bad requested range values with form [ - ]",
+                        ));
                     }
                     end_pos = body_size - 1;
                 }
@@ -772,7 +786,7 @@ impl<'a> Response<'a> {
                     self.write_state(416);
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        "bad range values",
+                        "bad requested range values due to out of range",
                     ));
                 }
 
@@ -900,8 +914,19 @@ impl<'a> Response<'a> {
     pub fn write_file(&mut self, path: String) -> ResponseConfig<'_, 'a> {
         match std::fs::OpenOptions::new().read(true).open(path.clone()) {
             Ok(file) => {
-                let len = file.metadata().unwrap().len();
-                self.add_header(String::from("Content-length"), len.to_string());
+                match file.metadata() {
+                    Ok(meta) => {
+                        self.add_header(String::from("Content-length"), meta.len().to_string());
+                    }
+                    Err(_) => {
+                        self.write_string(&format!("{} cannot get file length", path))
+                            .status(404);
+                        return ResponseConfig {
+                            res: self,
+                            has_failure: true,
+                        };
+                    }
+                };
                 let extension = std::path::Path::new(&path)
                     .extension()
                     .and_then(OsStr::to_str);
@@ -978,7 +1003,10 @@ impl<'a> Response<'a> {
                                     );
                                 }
                                 None => {
-                                    self.body = BodyType::Memory(MemoryType::String("text/plain".to_string()), s.into());
+                                    self.body = BodyType::Memory(
+                                        MemoryType::String("text/plain".to_string()),
+                                        s.into(),
+                                    );
                                 }
                             }
                             return ResponseConfig {
