@@ -782,7 +782,7 @@ impl<'a> Response<'a> {
                     }
                     end_pos = body_size - 1;
                 }
-                if  beg_pos > end_pos || (beg_pos > (body_size - 1)) || end_pos >= body_size {
+                if beg_pos > end_pos || (beg_pos > (body_size - 1)) || end_pos >= body_size {
                     self.write_state(416);
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -1101,8 +1101,14 @@ impl LayzyBuffers {
                 let need_size = index.end - index.start;
                 let buffs = &mut file_v.buffs;
                 buffs.resize(need_size, b'\0');
-                match file.read(buffs) {
-                    Ok(_) => return Ok(buffs),
+                match file.read(&mut buffs[0..]) {
+                    Ok(read_size) => {
+                        if read_size != need_size {
+                            let msg = format!("cannot read enough bytes from the file, need bytes: {}, actual read bytes: {}",need_size,read_size);
+                            return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                        }
+                        return Ok(buffs);
+                    }
                     Err(e) => {
                         return Err(e);
                     }
