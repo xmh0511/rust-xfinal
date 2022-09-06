@@ -782,7 +782,7 @@ impl<'a> Response<'a> {
                     }
                     end_pos = body_size - 1;
                 }
-                if beg_pos > end_pos || (beg_pos >= (body_size - 1)) || end_pos >= body_size {
+                if  beg_pos > end_pos || (beg_pos > (body_size - 1)) || end_pos >= body_size {
                     self.write_state(416);
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
