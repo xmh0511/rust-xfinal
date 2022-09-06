@@ -1107,7 +1107,7 @@ impl LayzyBuffers {
                             let msg = format!("cannot read enough bytes from the file, need bytes: {}, actual read bytes: {}",need_size,read_size);
                             return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                         }
-                        return Ok(buffs);
+                        return Ok(&buffs[0..read_size]);
                     }
                     Err(e) => {
                         return Err(e);
