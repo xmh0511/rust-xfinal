@@ -375,10 +375,9 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
             if conn_data.server_config.open_log {
                 let now = get_current_date();
                 println!(
-                    "[{}] >>> error in reading http header in http_parser.rs; type: [{}], line: [{}], msg: [{}]",
+                    "[{}] >>> error in reading http header in http_parser.rs; type: [{}], {}",
                     now,
                     e.kind().to_string(),
-                    line!(),
                     e.to_string()
                 );
             }
@@ -499,7 +498,7 @@ fn read_http_head(
             //&mut read_buffs[start_read_pos..]
             Ok(read_size) => {
                 if read_size == 0 {
-                    let info = format!("http_parser.rs line: {}, lost connection", line!());
+                    let info = format!("line: [{}], msg: [lost connection]", line!());
                     let e = io::Error::new(io::ErrorKind::InvalidInput, info);
                     return Err(e);
                 }
@@ -519,14 +518,15 @@ fn read_http_head(
                             return Ok((s.to_string(), None));
                         }
                         Err(e) => {
-                            let msg = format!("line: {}, {}", line!(), ToString::to_string(&e));
+                            let msg =
+                                format!("line: [{}], msg: [{}]", line!(), ToString::to_string(&e));
                             let err = io::Error::new(io::ErrorKind::InvalidData, msg);
                             return Err(err);
                         }
                     }
                 } else {
                     if total_read_size > server_config.max_header_size {
-                        let msg = format!("line: {}, header too large", line!());
+                        let msg = format!("line: [{}], msg: [header too large]", line!());
                         let e = io::Error::new(io::ErrorKind::InvalidData, msg);
                         return Err(e);
                     }
@@ -537,7 +537,7 @@ fn read_http_head(
                 }
             }
             Err(e) => {
-                let msg = format!("line: {}, {}", line!(), ToString::to_string(&e));
+                let msg = format!("line: [{}], msg: [{}]", line!(), ToString::to_string(&e));
                 let err = io::Error::new(e.kind(), msg);
                 return Err(err);
             }
