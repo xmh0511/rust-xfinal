@@ -95,7 +95,9 @@ impl Websocket {
             let lock_guard = self.write_mutex.lock().unwrap();
             match writer.write(&buffs) {
                 Ok(_) => {}
-                Err(_) => {}
+                Err(_) => {
+                    let _ = self.conn.shutdown(std::net::Shutdown::Both);
+                }
             }
             drop(lock_guard);
         } else if len >= 126 {
@@ -109,6 +111,7 @@ impl Websocket {
             };
             //println!("fragment_count:{}", fragment_count);
             let mut start_pos = 0usize;
+            let lock_guard = self.write_mutex.lock().unwrap();
             while fragment_count > 0 {
                 let mut buffs = Vec::new();
                 fragment_count -= 1;
@@ -161,6 +164,7 @@ impl Websocket {
                     }
                 }
             }
+            drop(lock_guard);
         }
     }
 
@@ -217,13 +221,8 @@ pub(crate) fn construct_http_event_for_websocket(
         charset: None,
     };
 
-    //let ws_router_map = &connection_config.ws_router_map;
     let ws_middleware_result = invoke_ws_middlewares(&connection_config, &request, &mut response);
-    //println!("ws_middleware_result: {:?}",ws_middleware_result.0);
-    //do_router(&router, &request, &mut response);
-    // if need_alive{
-    //    response.add_header(String::from("Connection"), String::from("keep-alive"));
-    // }
+
     if !ws_middleware_result.0 {
         let mut stream = conn.borrow_mut();
         if !response.chunked.enable {
@@ -429,6 +428,8 @@ fn switch_to_websocket(
         let mut reader = BufReader::new(inner);
         'Restart: loop {
             let mut data_buffs = Vec::new();
+            let mut opcode = 0;
+            let mut first_entry = true;
             'ReadFrame: loop {
                 let mut buff = [b'\0'; 2];
                 match reader.read(&mut buff) {
@@ -438,7 +439,10 @@ fn switch_to_websocket(
                         }
                         let first_byte = buff[0];
                         let fin = (first_byte >> 7) & 1; // 1是最后一个包或完整的包, 0是分包
-                        let opcode = first_byte & 0b00001111u8;
+                        if first_entry {
+                            opcode = first_byte & 0b00001111u8; //如果是分片传输，只记录首次的frame中的opcode
+                            first_entry = false;
+                        }
                         if size == 2 {
                             let second_byte = buff[1];
                             let mask = (second_byte >> 7) & 1;
