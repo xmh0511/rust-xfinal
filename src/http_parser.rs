@@ -18,14 +18,22 @@ use uuid;
 
 use chrono;
 
+pub mod websocket;
+
+pub use websocket::{Websocket,WebsocketEvent, WsMessage};
+
 pub mod connection;
 pub use connection::{
     BodyContent, BodyType, MultipleFormData, MultipleFormFile, Request, Response,
-    ResponseChunkMeta, ResponseRangeMeta,
+    ResponseChunkMeta, ResponseRangeMeta
 };
 
 pub trait Router {
     fn call(&self, req: &Request, res: &mut Response);
+}
+
+pub trait WsRouter {
+    fn call(&self, event: WebsocketEvent);
 }
 
 pub trait MiddleWare {
@@ -37,6 +45,10 @@ pub type MiddleWareVec = Vec<Arc<dyn MiddleWare + Send + Sync>>;
 pub type RouterValue = (Option<MiddleWareVec>, Arc<dyn Router + Send + Sync>);
 
 pub type RouterMap = Arc<HashMap<String, RouterValue>>;
+
+pub type WsRouterValue = (Option<MiddleWareVec>, Arc<dyn WsRouter + Send + Sync>);
+
+pub type WsRouterMap = Arc<HashMap<String, WsRouterValue>>;
 
 impl<T> MiddleWare for T
 where
@@ -56,10 +68,20 @@ where
     }
 }
 
+impl<T> WsRouter for T
+where
+    T: Fn(&mut WebsocketEvent),
+{
+    fn call(&self, mut event: WebsocketEvent) {
+        (*self)(&mut event);
+    }
+}
+
 #[derive(Clone)]
 pub struct ConnectionData {
     pub(super) router_map: RouterMap,
     pub(super) server_config: ServerConfig,
+    pub(super) ws_router_map: WsRouterMap,
 }
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -72,6 +94,9 @@ pub struct ServerConfig {
     pub(super) max_header_size: usize,
     pub(super) read_buff_increase_size: usize,
     pub(super) secret_key: Arc<Hmac<Sha256>>,
+	pub(super) ws_read_timeout:u32,
+	pub(super) ws_write_timeout:u32,
+	pub(super) ws_frame_size:usize
 }
 
 enum HasBody {
@@ -238,6 +263,24 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
             //println!("{:#?}", head_result.as_ref().unwrap());
             match head_result {
                 Ok((method, url, version, map)) => {
+                    let need_upgrade = websocket::is_websocket_upgrade(method, &map);
+                    if need_upgrade.0 == true {
+                        let ws_result = websocket::construct_http_event_for_websocket(
+                            &mut stream,
+                            method,
+                            url,
+                            version,
+                            &map,
+                            Arc::clone(&conn_data),
+                        );
+						//println!("{}",ws_result.0);
+						if ws_result.0{
+							let ws_version = need_upgrade.1;
+							let sec_websocket_key = need_upgrade.2;
+							websocket::handle_websocket_connection(stream, map, ws_version, sec_websocket_key,ws_result.1.unwrap(),conn_data);
+						}
+                        return;
+                    }
                     let need_alive = is_keep_alive(&map);
                     match has_body(&map) {
                         HasBody::Len(size) => match possible_body {

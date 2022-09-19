@@ -1,6 +1,6 @@
 [package]
 name = "rust-xfinal"
-version = "0.8.29"
+version = "0.8.30"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A safe and simplely used web server framework"
@@ -22,6 +22,8 @@ expedite = "0.1.0"
 chrono = "0.4.22"
 chrono-tz = "0.6.3"
 multimap = "0.8.3"
+base64 = "0.13.0"
+sha1 = "0.10.5"
 
 [dependencies.uuid]
 version = "1.1.2"

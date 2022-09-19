@@ -7,8 +7,10 @@ mod thread_pool;
 
 mod http_parser;
 
+use http_parser::WsRouterValue;
 pub use http_parser::{
     ConnectionData, MiddleWare, Request, Response, Router, RouterMap, RouterValue, ServerConfig,
+    Websocket, WebsocketEvent, WsRouter,WsMessage
 };
 
 pub use rust_xfinal_macro::end_point;
@@ -29,11 +31,14 @@ pub mod cookie;
 
 pub use cookie::Period;
 
-pub use hmac;
-pub use sha2;
 pub use chrono;
 pub use chrono_tz;
+pub use hmac;
+pub use sha2;
 
+pub use base64;
+
+pub use sha1;
 
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -84,6 +89,7 @@ pub struct HttpServer {
     end_point: EndPoint,
     thread_number: u16,
     router: HashMap<String, RouterValue>,
+    ws_router: HashMap<String, WsRouterValue>,
     config_: ServerConfig,
 }
 
@@ -123,6 +129,35 @@ impl<'a> RouterRegister<'a> {
     }
 }
 
+pub struct WsRouterRegister<'a> {
+    server: &'a mut HttpServer,
+    path: &'a str,
+}
+
+impl<'a> WsRouterRegister<'a> {
+    pub fn reg<F>(&mut self, f: F)
+    where
+        F: WsRouter + Send + Sync + 'static + Clone,
+    {
+        self.server
+            .ws_router
+            .insert(self.path.to_string(), (None, Arc::new(f.clone())));
+    }
+
+    pub fn reg_with_middlewares<F>(
+        &mut self,
+        middlewares: Vec<Arc<dyn MiddleWare + Send + Sync>>,
+        f: F,
+    ) where
+        F: WsRouter + Send + Sync + 'static + Clone,
+    {
+        self.server.ws_router.insert(
+            self.path.to_string(),
+            (Some(middlewares.clone()), Arc::new(f.clone())),
+        );
+    }
+}
+
 impl HttpServer {
     /// > create an instance of http server
     /// >> - end: use `end_point![0.0.0.0:8080]` to construct `EndPoint`
@@ -140,7 +175,8 @@ impl HttpServer {
                     Ok(size) => {
                         if size == 0 {
                             let s = uuid::Uuid::new_v4().to_string();
-                            file.write(s.as_bytes()).expect("write new secret key error");
+                            file.write(s.as_bytes())
+                                .expect("write new secret key error");
                             s
                         } else {
                             s
@@ -157,17 +193,16 @@ impl HttpServer {
         };
         type HmacSha256 = Hmac<Sha256>;
         let mac = match HmacSha256::new_from_slice(key.as_bytes()) {
-            Ok(r) => {
-				r
-			},
+            Ok(r) => r,
             Err(e) => {
-				panic!("HmacSha256::new_from_slice error:{}", e.to_string())
-			},
+                panic!("HmacSha256::new_from_slice error:{}", e.to_string())
+            }
         };
         Self {
             end_point: end,
             thread_number: count,
             router: HashMap::new(),
+            ws_router: HashMap::new(),
             config_: ServerConfig {
                 upload_directory: String::from("./upload"),
                 read_timeout: 5 * 1000,
@@ -178,6 +213,9 @@ impl HttpServer {
                 max_header_size: 3 * 1024 * 1024,
                 read_buff_increase_size: 1024,
                 secret_key: Arc::new(mac),
+                ws_read_timeout: 5 * 60 * 1000,
+                ws_write_timeout: 5 * 60 * 1000,
+				ws_frame_size:130
             },
         }
     }
@@ -227,6 +265,27 @@ impl HttpServer {
         self.config_.read_buff_increase_size = size;
     }
 
+    /// > This method specifies the value of time when waiting for the websocket read from the client.
+    /// >> - [unit: millisecond]
+    pub fn set_ws_readtimeout(&mut self, millis: u32) {
+        self.config_.ws_read_timeout = millis;
+    }
+
+    /// > This method specifies the value of time when waiting for the websocket write to the client.
+    /// >> - [unit: millisecond]
+    pub fn set_ws_writetimeout(&mut self, millis: u32) {
+        self.config_.ws_write_timeout = millis;
+    }
+
+	/// > This method specifies the size of the websocket's fragment 
+	/// >> - [unit: byte]
+	pub fn set_ws_frame_size(& mut self, size:usize){
+		if size < 126{
+			panic!("shall be larger than or equal to 126");
+		}
+		self.config_.ws_frame_size = size;
+	}
+
     /// > To start a http server
     /// >> - This is a block method, which implies all set to the instance of HttpServer
     ///  should precede the call of this method
@@ -245,8 +304,10 @@ impl HttpServer {
             },
         };
         let safe_router = Arc::new(self.router.clone());
+        let safe_ws_router = Arc::new(self.ws_router.clone());
         let conn_data = Arc::new(ConnectionData {
             router_map: safe_router,
+            ws_router_map: safe_ws_router,
             server_config: self.config_.clone(),
         });
         match listen {
@@ -261,16 +322,20 @@ impl HttpServer {
                                 Ok(_) => {}
                                 Err(e) => {
                                     if self.config_.open_log {
-										let now = http_parser::get_current_date();
-                                        println!("[{}] >>> error in send connection: {}",now, e.to_string());
+                                        let now = http_parser::get_current_date();
+                                        println!(
+                                            "[{}] >>> error in send connection: {}",
+                                            now,
+                                            e.to_string()
+                                        );
                                     }
                                 }
                             }
                         }
                         Err(e) => {
                             if self.config_.open_log {
-								let now = http_parser::get_current_date();
-                                println!("[{}] >>> error on incoming:{}",now, e.to_string());
+                                let now = http_parser::get_current_date();
+                                println!("[{}] >>> error on incoming:{}", now, e.to_string());
                             }
                         }
                     }
@@ -316,6 +381,10 @@ impl HttpServer {
             methods: methods.serialize(),
             path,
         }
+    }
+
+    pub fn route_ws<'a>(&'a mut self, path: &'a str) -> WsRouterRegister<'a> {
+        WsRouterRegister { server: self, path }
     }
 
     /// > Specify the action when a request does not have a corresponding registered router

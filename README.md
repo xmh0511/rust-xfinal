@@ -21,6 +21,7 @@ A safe and performance web server framework that is written by Rust.
 6. View render based on tera
 7. Support the resumable cookie(i.e the cookie can still be recognized after the server is restarted)
 8. Support transfer user data from middlwares to eventual router
+9. Support websocket
 
 ### Features that haven't been supported yet
 1. Seems not to have
