@@ -222,4 +222,44 @@ fn main() {
         },
     );
 ````
+> 9. Websocket
+````rust
+    fn interrupt(req: &Request, res: &mut Response) -> bool {
+        println!("invoke");
+        true
+    }
+    server.route_ws("/ws").reg_with_middlewares(inject_middlewares![interrupt],|ws:WebsocketEvent| {
+        //println!("message: {:?}", ws.message);
+        match &ws.message {
+            WsMessage::Open => {
+                println!("open!");
+                ws.write_string("hello");
+            },
+            WsMessage::Message(data, opcode) => {
+                let s = std::str::from_utf8(&data);
+                println!("{:?},len:{}",s,s.unwrap().len());
+            },
+            WsMessage::Close => {
+                println!("close");
+            },
+        };
+    });
+
+    server.route_ws("/ws2").reg(|ws:WebsocketEvent| {
+        //println!("message: {:?}", ws.message);
+        match &ws.message {
+            WsMessage::Open => {
+                println!("open!");
+                ws.write_string("hello");
+            },
+            WsMessage::Message(data, opcode) => {
+                let s = std::str::from_utf8(&data);
+                println!("{:?},len:{}",s,s.unwrap().len());
+            },
+            WsMessage::Close => {
+                println!("close");
+            },
+        };
+    });
+````
 
