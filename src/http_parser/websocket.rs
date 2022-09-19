@@ -439,6 +439,7 @@ fn switch_to_websocket(
                         }
                         let first_byte = buff[0];
                         let fin = (first_byte >> 7) & 1; // 1是最后一个包或完整的包, 0是分包
+                        println!("first_entry:{first_entry}, first_byte:{:b}",first_byte);
                         if first_entry {
                             opcode = first_byte & 0b00001111u8; //如果是分片传输，只记录首次的frame中的opcode
                             first_entry = false;
