@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter};
 use std::net::TcpStream;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -188,6 +189,13 @@ impl WebsocketEvent {
     }
 }
 
+impl Deref for WebsocketEvent {
+    type Target = Websocket;
+    fn deref(&self) -> &Self::Target {
+        &self.ws
+    }
+}
+
 pub(crate) fn construct_http_event_for_websocket(
     stream: &mut TcpStream,
     method: &str,
@@ -349,21 +357,21 @@ fn read_ws_data(
     reader: &mut BufReader<&TcpStream>,
     data_len: usize,
     data_buffs: &mut Vec<u8>,
+    mask_key: [u8; 4],
 ) -> bool {
     let current_len = data_buffs.len();
     data_buffs.resize(current_len + data_len, b'\0');
-    match reader.read(&mut data_buffs[current_len..]) {
-        Ok(size) => {
-            if size == 0 || size != data_len {
-                return false;
-            }
+    //println!("current pos:{current_len}, size:{}", current_len + data_len);
+    match reader.read_exact(&mut data_buffs[current_len..]) {
+        Ok(_) => {
+            decode_ws_data(&mut data_buffs[current_len..], mask_key);
             true
         }
         Err(_) => false,
     }
 }
 
-fn decode_ws_data(mut raw_data: Vec<u8>, mask_key: [u8; 4]) -> Vec<u8> {
+fn decode_ws_data(raw_data: &mut [u8], mask_key: [u8; 4]) {
     let mut i = 0;
     let len = raw_data.len();
     while i < len {
@@ -372,7 +380,6 @@ fn decode_ws_data(mut raw_data: Vec<u8>, mask_key: [u8; 4]) -> Vec<u8> {
         raw_data[i] = r;
         i += 1;
     }
-    raw_data
 }
 
 fn switch_to_websocket(
@@ -432,167 +439,157 @@ fn switch_to_websocket(
             let mut first_entry = true;
             'ReadFrame: loop {
                 let mut buff = [b'\0'; 2];
-                match reader.read(&mut buff) {
-                    Ok(size) => {
-                        if size == 0 {
-                            break 'Restart;
-                        }
+                match reader.read_exact(&mut buff) {
+                    Ok(_) => {
                         let first_byte = buff[0];
                         let fin = (first_byte >> 7) & 1; // 1是最后一个包或完整的包, 0是分包
-                        println!("first_entry:{first_entry}, first_byte:{:b}, second_byte:{:b}",first_byte,buff[1]);
+                                                         // println!(
+                                                         //     "first_entry:{first_entry}, first_byte:{:b}, second_byte:{:b}",
+                                                         //     first_byte, buff[1]
+                                                         // );
                         if first_entry {
                             opcode = first_byte & 0b00001111u8; //如果是分片传输，只记录首次的frame中的opcode
                             first_entry = false;
                         }
-                        if size == 2 {
-                            let second_byte = buff[1];
-                            let mask = (second_byte >> 7) & 1;
-                            if mask != 1 {
-                                break 'Restart;
-                            }
-                            if opcode == 8 {
-                                // //关闭连接
-                                //构造close 通知
-                                break 'Restart;
-                            }
-                            if opcode == 9 {
-                                //ping
-                                // 构造pong消息
-                                ws_handler.write(Vec::new(), 10);
-                                continue 'Restart;
-                            }
-                            if opcode == 10 {
-                                //pong
-                                // 客户端回应pong消息
-                                continue 'Restart;
-                            }
-                            // 其他情况的opcode是消息体
-                            let payload = second_byte & 0b01111111u8;
-                            let data_len = if payload <= 125 {
-                                // 就是data的实际大小
-                                payload as usize
-                            } else if payload == 126 {
-                                // 后两个字节表示长度
-                                let mut two_bytes = [b'\0'; 2];
-                                match reader.read(&mut two_bytes) {
-                                    Ok(size) => {
-                                        if size == 0 || size != 2 {
-                                            break 'Restart;
-                                        }
-                                        let endian = [
-                                            b'\0',
-                                            b'\0',
-                                            b'\0',
-                                            b'\0',
-                                            b'\0',
-                                            b'\0',
-                                            two_bytes[0],
-                                            two_bytes[1],
-                                        ];
-                                        usize::from_be_bytes(endian)
-                                    }
-                                    Err(e) => {
-                                        if server_log_open {
-                                            let now = super::get_current_date();
-                                            println!(
-												"[{}] >>> error in websocket read thread in websocket.rs; type: [{}], line: [{}], msg: [{}]",
-												now,
-												e.kind().to_string(),
-												line!(),
-												ToString::to_string(&e)
-											);
-                                        }
-                                        break 'Restart;
-                                    }
-                                }
-                            } else if payload == 127 {
-                                // 后 8个字节表示长度
-                                let mut eight_bytes = [b'\0'; 8];
-                                match reader.read(&mut eight_bytes) {
-                                    Ok(size) => {
-                                        if size == 0 || size != 8 {
-                                            break 'Restart;
-                                        }
-                                        usize::from_be_bytes(eight_bytes)
-                                    }
-                                    Err(e) => {
-                                        if server_log_open {
-                                            let now = super::get_current_date();
-                                            println!(
-												"[{}] >>> error in websocket read thread in websocket.rs; type: [{}], line: [{}], msg: [{}]",
-												now,
-												e.kind().to_string(),
-												line!(),
-												ToString::to_string(&e)
-											);
-                                        }
-                                        break 'Restart;
-                                    }
-                                }
-                            } else {
-                                // payload 无效值
-                                break 'Restart;
-                            }; // data_len end
-
-                            // 读取 Masking-key， 4个字节
-                            let mut mask_key_buffs = [b'\0'; 4];
-                            match reader.read(&mut mask_key_buffs) {
-                                Ok(size) => {
-                                    if size == 0 || size != 4 {
-                                        break 'Restart;
-                                    }
-                                    // read data part;
-                                    let r = read_ws_data(&mut reader, data_len, &mut data_buffs);
-                                    if r == false {
-                                        break 'Restart;
-                                    } else {
-                                        if fin == 1 {
-                                            // 构造消息事件
-                                            let event = WebsocketEvent {
-                                                ws: ws_handler.clone(),
-                                                message: WsMessage::Message(
-                                                    decode_ws_data(data_buffs, mask_key_buffs),
-                                                    opcode,
-                                                ),
-                                            };
-                                            //println!("{:?}", event.message);
-                                            match sender.send(event) {
-                                                Ok(_) => {}
-                                                Err(e) => {
-                                                    if server_log_open {
-                                                        let now = super::get_current_date();
-                                                        println!(
-															"[{}] >>> error in websocket read thread in websocket.rs; type: [SendError], line: [{}], msg: [{}]",
-															now,
-															line!(),
-															ToString::to_string(&e)
-														);
-                                                    }
-                                                    break 'Restart; // 发送消息错误，关闭当前线程
-                                                }
-                                            }
-                                            continue 'Restart; // 读完完整消息体，重新初始状态等待下一次消息
-                                        } else {
-                                            continue 'ReadFrame; //非完整消息，继续循环ReadFrame块功能
-                                        }
-                                    }
+                        let second_byte = buff[1];
+                        let mask = (second_byte >> 7) & 1;
+                        if mask != 1 {
+                            break 'Restart;
+                        }
+                        if opcode == 8 {
+                            // //关闭连接
+                            //构造close 通知
+                            break 'Restart;
+                        }
+                        if opcode == 9 {
+                            //ping
+                            // 构造pong消息
+                            ws_handler.write(Vec::new(), 10);
+                            continue 'Restart;
+                        }
+                        if opcode == 10 {
+                            //pong
+                            // 客户端回应pong消息
+                            continue 'Restart;
+                        }
+                        // 其他情况的opcode是消息体
+                        let payload = second_byte & 0b01111111u8;
+                        let data_len = if payload <= 125 {
+                            // 就是data的实际大小
+                            payload as usize
+                        } else if payload == 126 {
+                            // 后两个字节表示长度
+                            let mut two_bytes = [b'\0'; 2];
+                            match reader.read_exact(&mut two_bytes) {
+                                Ok(_) => {
+                                    let endian = [
+                                        b'\0',
+                                        b'\0',
+                                        b'\0',
+                                        b'\0',
+                                        b'\0',
+                                        b'\0',
+                                        two_bytes[0],
+                                        two_bytes[1],
+                                    ];
+                                    usize::from_be_bytes(endian)
                                 }
                                 Err(e) => {
                                     if server_log_open {
                                         let now = super::get_current_date();
                                         println!(
+												"[{}] >>> error in websocket read thread in websocket.rs; type: [{}], line: [{}], msg: [{}]",
+												now,
+												e.kind().to_string(),
+												line!(),
+												ToString::to_string(&e)
+											);
+                                    }
+                                    break 'Restart;
+                                }
+                            }
+                        } else if payload == 127 {
+                            // 后 8个字节表示长度
+                            let mut eight_bytes = [b'\0'; 8];
+                            match reader.read_exact(&mut eight_bytes) {
+                                Ok(_) => usize::from_be_bytes(eight_bytes),
+                                Err(e) => {
+                                    if server_log_open {
+                                        let now = super::get_current_date();
+                                        println!(
+												"[{}] >>> error in websocket read thread in websocket.rs; type: [{}], line: [{}], msg: [{}]",
+												now,
+												e.kind().to_string(),
+												line!(),
+												ToString::to_string(&e)
+											);
+                                    }
+                                    break 'Restart;
+                                }
+                            }
+                        } else {
+                            // payload 无效值
+                            break 'Restart;
+                        }; // data_len end
+                           //println!("data_len: {}", data_len);
+                           // 读取 Masking-key， 4个字节
+                        let mut mask_key_buffs = [b'\0'; 4];
+                        match reader.read_exact(&mut mask_key_buffs) {
+                            Ok(_) => {
+                                // read data part;
+                                let r = read_ws_data(
+                                    &mut reader,
+                                    data_len,
+                                    &mut data_buffs,
+                                    mask_key_buffs,
+                                );
+                                //println!("read data part: {r}");
+                                if r == false {
+                                    break 'Restart;
+                                } else {
+                                    if fin == 1 {
+                                        // 构造消息事件
+                                        //println!("total size:{}", data_buffs.len());
+                                        let event = WebsocketEvent {
+                                            ws: ws_handler.clone(),
+                                            message: WsMessage::Message(data_buffs, opcode),
+                                        };
+                                        //println!("{:?}", event.message);
+                                        match sender.send(event) {
+                                            Ok(_) => {}
+                                            Err(e) => {
+                                                if server_log_open {
+                                                    let now = super::get_current_date();
+                                                    println!(
+															"[{}] >>> error in websocket read thread in websocket.rs; type: [SendError], line: [{}], msg: [{}]",
+															now,
+															line!(),
+															ToString::to_string(&e)
+														);
+                                                }
+                                                break 'Restart; // 发送消息错误，关闭当前线程
+                                            }
+                                        }
+                                        continue 'Restart; // 读完完整消息体，重新初始状态等待下一次消息
+                                    } else {
+                                        //println!("continue to read data");
+                                        continue 'ReadFrame; //非完整消息，继续循环ReadFrame块功能
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if server_log_open {
+                                    let now = super::get_current_date();
+                                    println!(
 											"[{}] >>> error in websocket read thread in websocket.rs; type: [{}], line: [{}], msg: [{}]",
 											now,
 											e.kind().to_string(),
 											line!(),
 											ToString::to_string(&e)
 										);
-                                    }
-                                    break 'Restart;
                                 }
+                                break 'Restart;
                             }
-                        } else {
-                            break 'Restart;
                         }
                     }
                     Err(e) => {

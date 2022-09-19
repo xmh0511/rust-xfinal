@@ -70,10 +70,10 @@ where
 
 impl<T> WsRouter for T
 where
-    T: Fn(&mut WebsocketEvent),
+    T: Fn(WebsocketEvent),
 {
-    fn call(&self, mut event: WebsocketEvent) {
-        (*self)(&mut event);
+    fn call(&self, event: WebsocketEvent) {
+        (*self)(event);
     }
 }
 
