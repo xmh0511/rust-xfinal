@@ -75,7 +75,7 @@ pub struct Websocket {
     fragment_size: usize,
 }
 impl Websocket {
-	/// > Share the websocket connection
+    /// > Share the websocket connection
     pub fn clone(&self) -> Self {
         Websocket {
             conn: Arc::clone(&self.conn),
@@ -83,9 +83,11 @@ impl Websocket {
             fragment_size: self.fragment_size,
         }
     }
-	/// > Write the data whose type is specified by the sceond parameter to peer
-	/// >> The method is thread safety
+    /// > Write the data whose type is specified by the sceond parameter to peer
+    /// >> The method is thread safety
     pub fn write(&self, data: Vec<u8>, opcode: u8) {
+        let lock_guard = self.write_mutex.lock().unwrap();
+        //println!("write=======");
         let len = data.len();
         //println!("total len:{}", len);
         let mut writer = BufWriter::new(self.conn.as_ref());
@@ -96,14 +98,15 @@ impl Websocket {
             buffs.push(first_byte);
             buffs.push(second_byte);
             buffs.extend_from_slice(&data);
-            let lock_guard = self.write_mutex.lock().unwrap();
-            match writer.write(&buffs) {
-                Ok(_) => {}
+            match writer.write_all(&buffs) {
+                Ok(_) => {
+                    println!("write ok!");
+                }
                 Err(_) => {
                     let _ = self.conn.shutdown(std::net::Shutdown::Both);
+                    return;
                 }
             }
-            drop(lock_guard);
         } else if len >= 126 {
             let fragment_size = self.fragment_size;
             let mut fragment_count = {
@@ -115,7 +118,6 @@ impl Websocket {
             };
             //println!("fragment_count:{}", fragment_count);
             let mut start_pos = 0usize;
-            let lock_guard = self.write_mutex.lock().unwrap();
             while fragment_count > 0 {
                 let mut buffs = Vec::new();
                 fragment_count -= 1;
@@ -127,7 +129,12 @@ impl Websocket {
                 let first_byte = {
                     if start_pos == 0 {
                         // 首个包
-                        0b00000000u8 | opcode
+                        if fragment_count > 0 {
+                            // 且不是只有一个包
+                            0b00000000u8 | opcode
+                        } else {
+                            0b10000000u8 | opcode // 首个包且只有一个包
+                        }
                     } else {
                         if fragment_count > 0 {
                             //中间的包,非最后一个
@@ -138,6 +145,7 @@ impl Websocket {
                         }
                     }
                 };
+                //println!("{:b}",first_byte);
                 buffs.push(first_byte);
                 let actual_write_size = end_pos - start_pos;
                 if actual_write_size >= 126 {
@@ -158,29 +166,39 @@ impl Websocket {
                 }
                 //println!("{:?}", buffs);
                 buffs.extend_from_slice(fragment_data);
-                match writer.write(&buffs) {
+                match writer.write_all(&buffs) {
                     Ok(_) => {
                         start_pos = end_pos;
+                        //println!("fragment write ok!");
                         continue;
                     }
                     Err(_) => {
                         let _ = self.conn.shutdown(std::net::Shutdown::Both);
+                        return;
                     }
                 }
             }
-            drop(lock_guard);
         }
+        match writer.flush() {
+            Ok(_) => {}
+            Err(_) => {
+                let _ = self.conn.shutdown(std::net::Shutdown::Both);
+                return;
+            }
+        }
+        //println!("write over");
+        drop(lock_guard);
     }
 
-	/// > Conveniently to write string data to peer
-	/// >> The method is thread safety
+    /// > Conveniently to write string data to peer
+    /// >> The method is thread safety
     pub fn write_string(&self, s: &str) {
         let mut vec = Vec::new();
         vec.extend_from_slice(s.as_bytes());
         self.write(vec, 1);
     }
-	/// > Conveniently to write binary data to peer
-	/// >> The method is thread safety
+    /// > Conveniently to write binary data to peer
+    /// >> The method is thread safety
     pub fn write_binary(&self, data: Vec<u8>) {
         self.write(data, 2);
     }
