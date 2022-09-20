@@ -10,7 +10,7 @@ mod http_parser;
 use http_parser::WsRouterValue;
 pub use http_parser::{
     ConnectionData, MiddleWare, Request, Response, Router, RouterMap, RouterValue, ServerConfig,
-    Websocket, WebsocketEvent, WsRouter,WsMessage
+    Websocket, WebsocketEvent, WsMessage, WsRouter,
 };
 
 pub use rust_xfinal_macro::end_point;
@@ -215,7 +215,7 @@ impl HttpServer {
                 secret_key: Arc::new(mac),
                 ws_read_timeout: 5 * 60 * 1000,
                 ws_write_timeout: 5 * 60 * 1000,
-				ws_frame_size:130
+                ws_frame_size: 65535,
             },
         }
     }
@@ -277,14 +277,14 @@ impl HttpServer {
         self.config_.ws_write_timeout = millis;
     }
 
-	/// > This method specifies the size of the websocket's fragment 
-	/// >> - [unit: byte]
-	pub fn set_ws_frame_size(& mut self, size:usize){
-		if size < 126{
-			panic!("shall be larger than or equal to 126");
-		}
-		self.config_.ws_frame_size = size;
-	}
+    /// > This method specifies the size of the websocket's fragment
+    /// >> - [unit: byte]
+    pub fn set_ws_frame_size(&mut self, size: usize) {
+        if size < 126 {
+            panic!("shall be larger than or equal to 126");
+        }
+        self.config_.ws_frame_size = size;
+    }
 
     /// > To start a http server
     /// >> - This is a block method, which implies all set to the instance of HttpServer
@@ -383,6 +383,7 @@ impl HttpServer {
         }
     }
 
+	/// > Register a websocket router
     pub fn route_ws<'a>(&'a mut self, path: &'a str) -> WsRouterRegister<'a> {
         WsRouterRegister { server: self, path }
     }

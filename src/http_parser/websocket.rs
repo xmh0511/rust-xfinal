@@ -75,6 +75,7 @@ pub struct Websocket {
     fragment_size: usize,
 }
 impl Websocket {
+	/// > Share the websocket connection
     pub fn clone(&self) -> Self {
         Websocket {
             conn: Arc::clone(&self.conn),
@@ -82,6 +83,8 @@ impl Websocket {
             fragment_size: self.fragment_size,
         }
     }
+	/// > Write the data whose type is specified by the sceond parameter to peer
+	/// >> The method is thread safety
     pub fn write(&self, data: Vec<u8>, opcode: u8) {
         let len = data.len();
         //println!("total len:{}", len);
@@ -169,11 +172,15 @@ impl Websocket {
         }
     }
 
+	/// > Conveniently to write string data to peer
+	/// >> The method is thread safety
     pub fn write_string(&self, s: &str) {
         let mut vec = Vec::new();
         vec.extend_from_slice(s.as_bytes());
         self.write(vec, 1);
     }
+	/// > Conveniently to write binary data to peer
+	/// >> The method is thread safety
     pub fn write_binary(&self, data: Vec<u8>) {
         self.write(data, 2);
     }
