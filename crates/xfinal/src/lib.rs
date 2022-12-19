@@ -13,7 +13,8 @@ pub use http_parser::{
     Websocket, WebsocketEvent, WsMessage, WsRouter,
 };
 
-pub use rust_xfinal_macro::end_point;
+#[cfg(feature="macros")]
+pub use xfinal_macro::end_point;
 
 pub use http_parser::connection::http_response_table::{
     CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE,
