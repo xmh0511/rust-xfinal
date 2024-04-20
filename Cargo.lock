@@ -610,7 +610,7 @@ checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
 name = "rust-xfinal"
-version = "0.8.35"
+version = "0.8.36"
 dependencies = [
  "base64",
  "chrono",
