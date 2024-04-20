@@ -156,6 +156,7 @@ impl Cookie {
 
     pub(crate) fn to_string(&self) -> Option<String> {
         let time = if let Some(ref t) = self.max_age {
+            #[allow(deprecated)]
             let time = Pacific
                 .ymd(t.date.year as i32, t.date.month, t.date.day)
                 .and_hms(t.hours, t.minutes, t.seconds);
