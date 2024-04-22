@@ -15,7 +15,7 @@ pub use http_parser::{
     Websocket, WebsocketEvent, WsMessage, WsRouter,
 };
 
-#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")), cfg(feature = "macros"))]
 pub use xfinal_macro::end_point;
 
 pub use http_parser::connection::http_response_table::{
