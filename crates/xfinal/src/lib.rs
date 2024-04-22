@@ -1,3 +1,5 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
@@ -13,7 +15,7 @@ pub use http_parser::{
     Websocket, WebsocketEvent, WsMessage, WsRouter,
 };
 
-#[cfg(feature="macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 pub use xfinal_macro::end_point;
 
 pub use http_parser::connection::http_response_table::{
@@ -384,7 +386,7 @@ impl HttpServer {
         }
     }
 
-	/// > Register a websocket router
+    /// > Register a websocket router
     pub fn route_ws<'a>(&'a mut self, path: &'a str) -> WsRouterRegister<'a> {
         WsRouterRegister { server: self, path }
     }

@@ -1,38 +1,35 @@
 use std::sync::mpsc::{self, SendError, Sender};
 use std::thread;
 
-
 struct MyTask<T> {
     task: thread::JoinHandle<()>,
-	sender:Sender<T>
+    sender: Sender<T>,
 }
 pub(crate) struct ThreadPool<T> {
     tasks: Vec<Box<MyTask<T>>>,
-	index:u16,
-	max:u16
+    index: u16,
+    max: u16,
 }
 impl<T: 'static + Send> ThreadPool<T> {
     pub(super) fn new<F: FnMut(T) + Clone + Send + 'static>(num: u16, f: F) -> Self {
         let mut r = Self {
             tasks: Vec::new(),
-			index:0,
-			max:num
+            index: 0,
+            max: num,
         };
         for _ in 0..num {
             let mut f = f.clone();
-			let (tx, rx) = mpsc::channel();
+            let (tx, rx) = mpsc::channel();
             r.tasks.push(Box::new(MyTask {
-				sender:tx,
-                task: thread::spawn(move || {
-                    loop {
-                        let r = rx.recv();
-                        match r {
-                            Ok(stream) => {
-                                f(stream);
-                            }
-                            Err(e) => {
-								println!("recv() error: {}",e.to_string());
-							}
+                sender: tx,
+                task: thread::spawn(move || loop {
+                    let r = rx.recv();
+                    match r {
+                        Ok(stream) => {
+                            f(stream);
+                        }
+                        Err(e) => {
+                            println!("recv() error: {}", e.to_string());
                         }
                     }
                 }),

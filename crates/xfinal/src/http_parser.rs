@@ -20,12 +20,12 @@ use chrono;
 
 pub mod websocket;
 
-pub use websocket::{Websocket,WebsocketEvent, WsMessage};
+pub use websocket::{Websocket, WebsocketEvent, WsMessage};
 
 pub mod connection;
 pub use connection::{
     BodyContent, BodyType, MultipleFormData, MultipleFormFile, Request, Response,
-    ResponseChunkMeta, ResponseRangeMeta
+    ResponseChunkMeta, ResponseRangeMeta,
 };
 
 pub trait Router {
@@ -94,9 +94,9 @@ pub struct ServerConfig {
     pub(super) max_header_size: usize,
     pub(super) read_buff_increase_size: usize,
     pub(super) secret_key: Arc<Hmac<Sha256>>,
-	pub(super) ws_read_timeout:u32,
-	pub(super) ws_write_timeout:u32,
-	pub(super) ws_frame_size:usize
+    pub(super) ws_read_timeout: u32,
+    pub(super) ws_write_timeout: u32,
+    pub(super) ws_frame_size: usize,
 }
 
 enum HasBody {
@@ -273,12 +273,19 @@ pub fn handle_incoming((conn_data, mut stream): (Arc<ConnectionData>, TcpStream)
                             &map,
                             Arc::clone(&conn_data),
                         );
-						//println!("{}",ws_result.0);
-						if ws_result.0{
-							let ws_version = need_upgrade.1;
-							let sec_websocket_key = need_upgrade.2;
-							websocket::handle_websocket_connection(stream, map, ws_version, sec_websocket_key,ws_result.1.unwrap(),conn_data);
-						}
+                        //println!("{}",ws_result.0);
+                        if ws_result.0 {
+                            let ws_version = need_upgrade.1;
+                            let sec_websocket_key = need_upgrade.2;
+                            websocket::handle_websocket_connection(
+                                stream,
+                                map,
+                                ws_version,
+                                sec_websocket_key,
+                                ws_result.1.unwrap(),
+                                conn_data,
+                            );
+                        }
                         return;
                     }
                     let need_alive = is_keep_alive(&map);

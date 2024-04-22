@@ -9,6 +9,9 @@ readme = "README.md"
 repository = "https://github.com/xmh0511/rust-xfinal"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 tera = "1.17.0"

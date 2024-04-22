@@ -124,7 +124,7 @@ impl Cookie {
         self.http_only
     }
 
-	/// > Get data from a valid cookie
+    /// > Get data from a valid cookie
     pub fn get_data<T: FromStr>(&self, k: String) -> Option<T> {
         match self.data.get(&k) {
             Some(v) => match v.parse() {
@@ -141,12 +141,12 @@ impl Cookie {
         }
     }
 
-	/// > Insert data to cookie
+    /// > Insert data to cookie
     pub fn insert<T: ToString>(&mut self, k: String, v: T) {
         self.data.insert(k, v.to_string());
     }
 
-	/// > Generate a token from the cookie
+    /// > Generate a token from the cookie
     pub fn gen_token(&self) -> Option<String> {
         match self.data.clone().sign_with_key(&*self.secret_key) {
             Ok(s) => Some(s),
@@ -174,9 +174,9 @@ impl Cookie {
         };
         let http_only = {
             if self.http_only {
-				"HttpOnly;"
+                "HttpOnly;"
             } else {
-				""
+                ""
             }
         };
         if let Some(token) = self.gen_token() {
